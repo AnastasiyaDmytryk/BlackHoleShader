@@ -283,53 +283,53 @@ class DrawableWavefrontObject extends GameObject
             if (texMode & WebGpu.TextureMode.AMBIENT) {
                 this.ambientTexture = gpu.device.createTexture({
                     label: 'Ambient texture for ' + this.wavefrontObject.name,
-                    size: [texData.ambientTexture.data.width, texData.ambientTexture.data.height],
+                    size: [texData.ambientTexture.width, texData.ambientTexture.height],
                     format: 'rgba8unorm',
                     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
                 });
                 gpu.device.queue.copyExternalImageToTexture(
-                    { source: texData.ambientTexture.data },
+                    { source: texData.ambientTexture },
                     { texture: this.ambientTexture },
-                    [texData.ambientTexture.data.width, texData.ambientTexture.data.height],
+                    [texData.ambientTexture.width, texData.ambientTexture.height],
                 );
             }
             if (texMode & WebGpu.TextureMode.DIFFUSE) {
                 this.diffuseTexture = gpu.device.createTexture({
                     label: 'Diffuse texture for ' + this.wavefrontObject.name,
-                    size: [texData.diffuseTexture.data.width, texData.diffuseTexture.data.height],
+                    size: [texData.diffuseTexture.width, texData.diffuseTexture.height],
                     format: 'rgba8unorm',
                     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
                 });
                 gpu.device.queue.copyExternalImageToTexture(
-                    { source: texData.diffuseTexture.data },
+                    { source: texData.diffuseTexture },
                     { texture: this.diffuseTexture },
-                    [texData.diffuseTexture.data.width, texData.diffuseTexture.data.height],
+                    [texData.diffuseTexture.width, texData.diffuseTexture.height],
                 );
             }
             if (texMode & WebGpu.TextureMode.SPECULAR) {
                 this.specularTexture = gpu.device.createTexture({
                     label: 'Specular texture for ' + this.wavefrontObject.name,
-                    size: [texData.specularTexture.data.width, texData.specularTexture.data.height],
+                    size: [texData.specularTexture.width, texData.specularTexture.height],
                     format: 'rgba8unorm',
                     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
                 });
                 gpu.device.queue.copyExternalImageToTexture(
-                    { source: texData.specularTexture.data },
+                    { source: texData.specularTexture },
                     { texture: this.specularTexture },
-                    [texData.specularTexture.data.width, texData.specularTexture.data.height],
+                    [texData.specularTexture.width, texData.specularTexture.height],
                 );
             }
             if (texMode & WebGpu.TextureMode.NORMAL) {
                 this.normalTexture = gpu.device.createTexture({
                     label: 'Normal texture for ' + this.wavefrontObject.name,
-                    size: [texData.normalTexture.data.width, texData.normalTexture.data.height],
+                    size: [texData.normalTexture.width, texData.normalTexture.height],
                     format: 'rgba8unorm',
                     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
                 });
                 gpu.device.queue.copyExternalImageToTexture(
-                    { source: texData.normalTexture.data },
+                    { source: texData.normalTexture },
                     { texture: this.normalTexture },
-                    [texData.normalTexture.data.width, texData.normalTexture.data.height],
+                    [texData.normalTexture.width, texData.normalTexture.height],
                 );
             }
 

@@ -7,6 +7,37 @@
 
 
 /**
+ * Texture data representation for the Wavefront .obj format.
+ * 
+ * By default creates an empty object with no textures. Empty 
+ * fields should be set by the importer reading the .obj file.
+ */
+class TextureData
+{
+    constructor() {
+        this.textureMode = 0;
+        this.sampler = undefined;
+        // 'undefined' implies the lack of texture. 'null' implies invalidity.
+        this.ambientTexture = undefined;
+        this.diffuseTexture = undefined;
+        this.specularTexture = undefined;
+        this.normalTexture = undefined;
+        this.alphaTexture = undefined;
+    }
+
+    isValid() {
+        if (this.textureMode === 0) return false;
+        if (this.ambientTexture === null) return false;
+        if (this.diffuseTexture === null) return false;
+        if (this.specularTexture === null) return false;
+        if (this.normalTexture === null) return false;
+        if (this.alphaTexture === null) return false;
+        return true;
+    }
+}
+
+
+/**
  * Object representation of the Wavefront .obj format.
  * 
  * By default creates an empty (invalid) object. Empty fields 
@@ -24,6 +55,8 @@ class WavefrontObject
         this.material = undefined;
         this.hasTextures = false;
         this.textureData = new TextureData();
+        this.offset = { loc: [0,0,0], rot: [0,0,0], scl: [1,1,1] };
+        this.parentName = undefined;
     }
 
     isValid() {
@@ -49,6 +82,7 @@ class WavefrontImporter
     constructor() {
         this.materials = {};
         this.texturings = {};
+        this.bitmaps = {};
         this.objects = [];
         this.vertices = [];
         this.coorduvs = [];
@@ -57,16 +91,25 @@ class WavefrontImporter
         this.currentObject = undefined;
         this.currentTexturing = undefined;
         this.currentGroupParent = undefined;
+        this.offsetOverride = undefined;
+        this.parentOverride = undefined;
         // TODO: texture file importing
     }
 
-    // Returns a list of WaveFrontObjects parsed from the text
-    parse(objText, mtlText) {
-        if (objText === undefined || mtlText === undefined)
-            throw new Error("Invalid parameters. Cannot parse.\n"+ objText + "\n" + mtlText);
+    // Returns a list of WaveFrontObjects parsed from the given file
+    async parse(file) {
 
+        const objText = await fetch(file + '.obj').then(f=>f.text());
+        const mtlText = await fetch(file + '.mtl').then(f=>f.text());
+        var cfgText = undefined;
+        // The config file may not exist
+        try { cfgText = await fetch(file + '.cfg').then(f=>f.text()); }
+        catch { cfgText = undefined; }
+
+        // Parse through the config file if it exists to override default values
+        if (cfgText !== undefined) this.ingestCfgString(cfgText);
         // Parse through mtl first so that objects will get valid materials
-        this.ingestMtlString(mtlText);
+        await this.ingestMtlString(mtlText);
         // Parse through obj and add valid objects to this.objects
         this.ingestObjString(objText);
 
@@ -97,6 +140,8 @@ class WavefrontImporter
                     this.currentGroupParent = undefined;
                     this.currentObject = new WavefrontObject();
                     this.currentObject.name = data[0];
+                    if (this.offsetOverride !== undefined) this.currentObject.offset = this.offsetOverride;
+                    if (this.parentOverride !== undefined) this.currentObject.parentName = this.parentOverride;
                     // Since .obj uses vertex buffering, different objects share file-scoped vertex data
                     this.currentObject.vertices = this.vertices;
                     this.currentObject.coorduvs = this.coorduvs;
@@ -121,6 +166,8 @@ class WavefrontImporter
                     // Clone the parent object's data to a new group object
                     this.currentObject = new WavefrontObject();
                     this.currentObject.name = this.currentGroupParent.name;
+                    this.currentObject.offset = this.currentGroupParent.offset;
+                    this.currentObject.parentName = this.currentGroupParent.parentName;
                     // Since .obj uses vertex buffering, different objects share file-scoped vertex data
                     this.currentObject.vertices = this.vertices;
                     this.currentObject.coorduvs = this.coorduvs;
@@ -183,7 +230,7 @@ class WavefrontImporter
         this.currentGroupParent = undefined;
     }
 
-    ingestMtlString(str) {
+    async ingestMtlString(str) {
         var lines = str.split('\n');
         for (var line of lines) {
             var trim = line.trim();
@@ -233,43 +280,39 @@ class WavefrontImporter
 
                 // Ambient map
                 case 'map_Ka':
-                    var tex = Constants.TEXTURES[argtoken];
+                    var tex = await this.getExternalTexture(argtoken);
                     if (tex === undefined)
                         console.warn('Warning: Material "' + this.currentMaterial.name + '" references missing texture "' + argtoken +'"')
                     this.currentTexturing.ambientTexture = (tex !== undefined) ? tex : null;
                     this.currentTexturing.textureMode = this.currentTexturing.textureMode | WebGpu.TextureMode.AMBIENT;
-                    if (tex && tex.sampler !== undefined) this.currentTexturing.sampler = tex.sampler;
                     break;
 
                 // Diffuse map
                 case 'map_Kd':
-                    var tex = Constants.TEXTURES[argtoken];
+                    var tex = await this.getExternalTexture(argtoken);
                     if (tex === undefined)
                         console.warn('Warning: Material "' + this.currentMaterial.name + '" references missing texture "' + argtoken +'"')
                     this.currentTexturing.diffuseTexture = (tex !== undefined) ? tex : null;
                     this.currentTexturing.textureMode = this.currentTexturing.textureMode | WebGpu.TextureMode.DIFFUSE;
-                    if (tex && tex.sampler !== undefined) this.currentTexturing.sampler = tex.sampler;
                     break;
 
                 // Specular map
                 case 'map_Ks':
-                    var tex = Constants.TEXTURES[argtoken];
+                    var tex = await this.getExternalTexture(argtoken);
                     if (tex === undefined)
                         console.warn('Warning: Material "' + this.currentMaterial.name + '" references missing texture "' + argtoken +'"')
                     this.currentTexturing.specularTexture = (tex !== undefined) ? tex : null;
                     this.currentTexturing.textureMode = this.currentTexturing.textureMode | WebGpu.TextureMode.SPECULAR;
-                    if (tex && tex.sampler !== undefined) this.currentTexturing.sampler = tex.sampler;
                     break;
 
                 // Normal/Bump map
                 case 'map_bump':
                 case 'bump':
-                    var tex = Constants.TEXTURES[argtoken];
+                    var tex = await this.getExternalTexture(argtoken);
                     if (tex === undefined)
                         console.warn('Warning: Material "' + this.currentMaterial.name + '" references missing texture "' + argtoken +'"')
                     this.currentTexturing.normalTexture = (tex !== undefined) ? tex : null;
                     this.currentTexturing.textureMode = this.currentTexturing.textureMode | WebGpu.TextureMode.NORMAL;
-                    if (tex && tex.sampler !== undefined) this.currentTexturing.sampler = tex.sampler;
                     break;
 
                 // Unnecessary or unsupported (for now)
@@ -293,5 +336,78 @@ class WavefrontImporter
             this.texturings[this.currentMaterial.name] = this.currentTexturing;
         this.currentMaterial = undefined;
         this.currentTexturing = undefined;
+    }
+
+    ingestCfgString(str) {
+        if (this.offsetOverride === undefined)
+            this.offsetOverride = { loc: [0,0,0], rot: [0,0,0], scl: [1,1,1] };
+
+        var lines = str.split('\n');
+        for (var line of lines) {
+            var trim = line.trim();
+            if (trim.length == 0) continue;
+            if (trim.startsWith('#')) continue;
+            var tokens = trim.split(' ');
+            var element = tokens[0];
+            var data = tokens.slice(1);
+            var argtoken = data.join(' ');
+            switch (element) {
+                // Location/Position
+                case 'loc':
+                case 'pos':
+                case 'location':
+                case 'position':
+                    this.offsetOverride.loc = data.map(parseFloat);
+                    break;
+
+                // Rotation
+                case 'rot':
+                case 'rotation':
+                    this.offsetOverride.rot = data.map(parseFloat);
+                    break;
+
+                // Scale
+                case 'scl':
+                case 'scale':
+                    this.offsetOverride.scl = data.map(parseFloat);
+                    break;
+
+                // Custom parenting
+                case 'parent':
+                    this.parentOverride = argtoken;
+                    break;
+
+                default:
+                    console.error("This ("+element+") probably shouldn't happen.", this.offsetOverride);
+                    break;
+            }
+        }
+        // Check if valid
+        if (this.offsetOverride.loc.length != 3 ||
+            this.offsetOverride.rot.length != 3 ||
+            this.offsetOverride.scl.length != 3)
+        {
+            console.error("An object configuration file was invalid.", this.offsetOverride);
+            // Treat all fields as invalid if the file is bad
+            this.offsetOverride = undefined;
+            this.parentOverride = undefined;
+        }
+    }
+
+    async getExternalTexture(file) {
+        if (this.bitmaps[file] !== undefined)
+            return this.bitmaps[file];
+        try {
+            const img = new Image();
+            img.src = "./Textures/" + file;
+            await img.decode();
+            const bitmap = await createImageBitmap(img);
+            // Cache the bitmap to minimize fetches
+            this.bitmaps[file] = bitmap;
+            return bitmap;
+        } catch (error) {
+            console.log(error);
+            return undefined;
+        }
     }
 }

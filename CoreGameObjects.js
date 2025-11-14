@@ -70,37 +70,6 @@ class LightBase extends GameObject
 
 
 /**
- * Texture data representation for the Wavefront .obj format.
- * 
- * By default creates an empty object with no textures. Empty 
- * fields should be set by the importer reading the .obj file.
- */
-class TextureData
-{
-    constructor() {
-        this.textureMode = 0;
-        this.sampler = undefined;
-        // 'undefined' implies the lack of texture. 'null' implies invalidity.
-        this.ambientTexture = undefined;
-        this.diffuseTexture = undefined;
-        this.specularTexture = undefined;
-        this.normalTexture = undefined;
-        this.alphaTexture = undefined;
-    }
-
-    isValid() {
-        if (this.textureMode === 0) return false;
-        if (this.ambientTexture === null) return false;
-        if (this.diffuseTexture === null) return false;
-        if (this.specularTexture === null) return false;
-        if (this.normalTexture === null) return false;
-        if (this.alphaTexture === null) return false;
-        return true;
-    }
-}
-
-
-/**
  * Wrapper around the HTMLAudioElement player.
  * 
  * Contains world information used by the game engine.

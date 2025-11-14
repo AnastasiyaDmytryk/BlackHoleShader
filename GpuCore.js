@@ -46,15 +46,15 @@ class WebGpu
         this.root = new Root();
 
         var objects = []
-        for (const key in Constants.MODELS) {
-            let model = Constants.MODELS[key];
+        for (const key of Constants.MODELS) {
             var importer = new WavefrontImporter();
-            objects = objects.concat(importer.parse(model.obj, model.mtl));
+            let parsed = await importer.parse('./Models/' + key);
+            objects = objects.concat(parsed);
         }
         console.log(objects);
         objects.forEach(o => this.createObject(
             WebGpu.ObjectType.VISUAL, DrawableWavefrontObject, 
-            [0,0,0], [0,0,0], [1,1,1], o
+            o.offset.loc, o.offset.rot, o.offset.scl, o
         ));
 
         requestAnimationFrame(WebGpu.mainLoop);
@@ -246,10 +246,6 @@ class WebGpu
 
         this.setupGlobals();
 
-        // Load external assets
-        await this.loadExternalTextures();
-        await this.loadExternalModels();
-
         this.isReady = true;
     }
 
@@ -366,27 +362,6 @@ class WebGpu
         });
 
         console.log("Set up global buffers.");
-    }
-
-    async loadExternalTextures() {
-        for (const key of Object.keys(Constants.TEXTURES)) {
-            let file = key;
-            let img = new Image();
-            img.src = "./Textures/" + file;
-            await img.decode();
-            let bmp = await createImageBitmap(img);
-            Constants.TEXTURES[key].data = bmp;
-        };
-        console.log("Loaded external textures.");
-    }
-
-    async loadExternalModels() {
-        for (const key of Object.keys(Constants.MODELS)) {
-            let ofile = key + '.obj', mfile = key + '.mtl';
-            Constants.MODELS[key].obj = await fetch("./Models/" + ofile).then(f=>f.text());
-            Constants.MODELS[key].mtl = await fetch("./Models/" + mfile).then(f=>f.text());
-        };
-        console.log("Loaded external models.");
     }
 
     updateAll() {

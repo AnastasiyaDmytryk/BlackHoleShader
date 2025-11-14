@@ -88,20 +88,10 @@ class Constants
         CLEAR_COLOR: { r: 146/255, g: 219/255, b: 250/255, a: 1 },
     });
 
-    // Global texture variable
-    static TEXTURES = {
-        'Red Bulborb/circle.0.png': {},
-        'Red Bulborb/circle_nrm.png': {},
-        'Red Bulborb/circle_scm.png': {},
-        'Red Bulborb/face.0.png': {},
-        'Red Bulborb/face_nrm.png': {},
-        'Red Bulborb/face_scm.0.png': {},
-    };
-
-    // Global model variables
-    static MODELS = {
+    // Global model list
+    static MODELS = [
         //'Stage': {},
         //'TropicalWilds': {},
-        'Chappy': {},
-    };
+        'Chappy',
+    ];
 }
