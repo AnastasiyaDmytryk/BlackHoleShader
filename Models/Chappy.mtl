@@ -1,0 +1,62 @@
+# Blender 4.5.3 LTS MTL File: 'None'
+# www.blender.org
+
+newmtl circle_m.001
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd Red Bulborb/circle.0.png
+map_d Red Bulborb/circle.0.png
+map_Ks Red Bulborb/circle_scm.png
+map_bump Red Bulborb/circle_nrm.png
+
+newmtl eye_b_m.001
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd Red Bulborb/face.0.png
+map_d Red Bulborb/face.0.png
+map_Ks Red Bulborb/face_scm.0.png
+map_bump Red Bulborb/face_nrm.png
+
+newmtl eye_c_m.001
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd Red Bulborb/face.0.png
+map_d Red Bulborb/face.0.png
+map_Ks Red Bulborb/face_scm.0.png
+map_bump Red Bulborb/face_nrm.png
+
+newmtl eye_w_m.001
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd Red Bulborb/face.0.png
+map_d Red Bulborb/face.0.png
+map_Ks Red Bulborb/face_scm.0.png
+map_bump Red Bulborb/face_nrm.png
+
+newmtl face_m.001
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd Red Bulborb/face.0.png
+map_d Red Bulborb/face.0.png
+map_Ks Red Bulborb/face_scm.0.png
+map_bump Red Bulborb/face_nrm.png
