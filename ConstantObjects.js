@@ -90,8 +90,6 @@ class Constants
 
     // Global model list
     static MODELS = [
-        //'Stage': {},
-        //'TropicalWilds': {},
         'Chappy',
     ];
 }

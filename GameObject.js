@@ -47,9 +47,9 @@ class Transform
 class GameObject
 {
 	constructor(loc, rot, scl) {
-		this.loc = loc; // Local position offset
-		this.rot = rot; // Local rotation offset
-		this.scl = scl; // Local scale offset
+		this.loc = [...loc]; // Local position offset
+		this.rot = [...rot]; // Local rotation offset
+		this.scl = [...scl]; // Local scale offset
 		this.isTrigger = false;
 		this.collisionRadius = 1.0;
 		this.velocity = [0,0,0];

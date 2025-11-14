@@ -38,7 +38,8 @@ class WebGpu
 
     async slowStart() {
         // Create boilerplate objects
-        this.camera = new MovableCamera([0,0.5,2.5], [0,3.14159,0]);
+        //this.camera = new MovableCamera([0,0.5,2.5], [0,3.14159,0]);
+        this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
         this.lights.addPointLight([-3, 3, -3], [0.8,0.8,0.8]);
@@ -56,6 +57,25 @@ class WebGpu
             WebGpu.ObjectType.VISUAL, DrawableWavefrontObject, 
             o.offset.loc, o.offset.rot, o.offset.scl, o
         ));
+        objects.forEach(o => { 
+            let p = this.createObject(
+                WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
+                [15,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
+                [0, 0.005, 0], [0, 0.005, 0]
+            );
+            let p2 = this.createParentedObject(
+                p.id,
+                WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
+                [10,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
+                [0, -0.01, 0], [0, -0.005, 0]
+            );
+            this.createParentedObject(
+                p2.id,
+                WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
+                [-5,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
+                [0, 0.02, 0], [0, 0.01, 0]
+            );
+        });
 
         requestAnimationFrame(WebGpu.mainLoop);
     }
@@ -480,8 +500,8 @@ class WebGpu
     createObject(type, prefab, ...args) {
         // We heard you liked sorcery, so we put darker sorcery on your dark sorcery.
         var temp = new prefab(...args);
-        var id = "ID"+this.ObjectCounter;
-        this.ObjectCounter++;
+        var id = "ID"+this.objectCounter;
+        this.objectCounter++;
         temp.id = id;
         temp.prefab = prefab;
         switch (type) {
@@ -527,10 +547,23 @@ class WebGpu
             }
         }
         var temp = new prefab(...args);
-        var id = "ID"+this.ObjectCounter;
-        this.ObjectCounter++;
+        var id = "ID"+this.objectCounter;
+        this.objectCounter++;
         temp.id = id;
         temp.prefab = prefab;
+        switch (type) {
+            case WebGpu.ObjectType.VISUAL:
+                this.Visual[id] = temp;
+                break;
+            case WebGpu.ObjectType.SOLID:
+                this.Solid[id] = temp;
+                break;
+            case WebGpu.ObjectType.TRIGGER:
+                this.Trigger[id] = temp;
+                break;
+            default:
+                break;
+        }
         parent.children.push(temp);
         return temp;
     }

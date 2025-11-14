@@ -264,7 +264,8 @@ class LightSystem
 class DrawableWavefrontObject extends GameObject
 {
     constructor(loc, rot, scl, object) {
-        super(loc, rot, scl);
+        // Spread operator ensures arrays are copied
+        super([...loc], [...rot], [...scl]);
 
         this.wavefrontObject = object;
         this.ambientOverride = false;
@@ -420,6 +421,189 @@ class DrawableWavefrontObject extends GameObject
 
     update() {
         // Update self
+    }
+
+    render(commandPass, offset) {
+        // Render self
+        var materialStart = Constants.OFFSET.OBJECT_UNIFORM.MATERIAL;
+        var mWorldOffsetT = math.transpose(offset);
+        var overrides = 0 | this.ambientOverride ? (WebGpu.TextureMode.AMBIENT) : 0;
+        this.setBindGroups(commandPass);
+
+        gpu.device.queue.writeBuffer(this.objectUniformBuffer, Constants.OFFSET.OBJECT_UNIFORM.TRANSFORM, new Float32Array(math.flatten(mWorldOffsetT)._data));
+        gpu.device.queue.writeBuffer(this.objectUniformBuffer, materialStart + Constants.OFFSET.MATERIAL.K_AMBIENT, new Float32Array(this.wavefrontObject.material.kAmbient));
+        gpu.device.queue.writeBuffer(this.objectUniformBuffer, materialStart + Constants.OFFSET.MATERIAL.K_DIFFUSE, new Float32Array(this.wavefrontObject.material.kDiffuse));
+        gpu.device.queue.writeBuffer(this.objectUniformBuffer, materialStart + Constants.OFFSET.MATERIAL.K_SPECULAR, new Float32Array(this.wavefrontObject.material.kSpecular));
+        gpu.device.queue.writeBuffer(this.objectUniformBuffer, materialStart + Constants.OFFSET.MATERIAL.SHINE, new Float32Array([this.wavefrontObject.material.nSpecular]));
+        gpu.device.queue.writeBuffer(this.objectUniformBuffer, Constants.OFFSET.OBJECT_UNIFORM.TEXTURE_MODE, new Uint32Array([this.wavefrontObject.textureData.textureMode | overrides]));
+
+        commandPass.setVertexBuffer(0, this.vertexBuffer);
+        commandPass.draw(this.vertices.length/(3+3+2)); /* vertexnum/sizeof(params) */
+    }
+}
+
+
+class DrawableWavefrontPlanet extends PlanetBase
+{
+    constructor(loc, rot, scl, object, polSpd, rotSpd) {
+        // Spread operator ensures arrays are copied
+        super([...loc], [...rot], [...scl], [...polSpd], [...rotSpd]);
+
+        this.wavefrontObject = object;
+        this.ambientOverride = false;
+        let texData = this.wavefrontObject.textureData;
+        let texMode = texData.textureMode;
+
+        this.objectUniformBufferSize = Constants.SIZE.OBJECT_UNIFORM;
+        this.objectUniformBuffer = gpu.device.createBuffer({
+            label: "Local DrawableWavefrontObject buffer for " + this.id,
+            size: this.objectUniformBufferSize,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+        if (this.wavefrontObject.hasTextures) {
+            // Create and write to appropriate textures based on mode flags
+            if (texMode & WebGpu.TextureMode.AMBIENT) {
+                this.ambientTexture = gpu.device.createTexture({
+                    label: 'Ambient texture for ' + this.wavefrontObject.name,
+                    size: [texData.ambientTexture.width, texData.ambientTexture.height],
+                    format: 'rgba8unorm',
+                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                });
+                gpu.device.queue.copyExternalImageToTexture(
+                    { source: texData.ambientTexture },
+                    { texture: this.ambientTexture },
+                    [texData.ambientTexture.width, texData.ambientTexture.height],
+                );
+            }
+            if (texMode & WebGpu.TextureMode.DIFFUSE) {
+                this.diffuseTexture = gpu.device.createTexture({
+                    label: 'Diffuse texture for ' + this.wavefrontObject.name,
+                    size: [texData.diffuseTexture.width, texData.diffuseTexture.height],
+                    format: 'rgba8unorm',
+                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                });
+                gpu.device.queue.copyExternalImageToTexture(
+                    { source: texData.diffuseTexture },
+                    { texture: this.diffuseTexture },
+                    [texData.diffuseTexture.width, texData.diffuseTexture.height],
+                );
+            }
+            if (texMode & WebGpu.TextureMode.SPECULAR) {
+                this.specularTexture = gpu.device.createTexture({
+                    label: 'Specular texture for ' + this.wavefrontObject.name,
+                    size: [texData.specularTexture.width, texData.specularTexture.height],
+                    format: 'rgba8unorm',
+                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                });
+                gpu.device.queue.copyExternalImageToTexture(
+                    { source: texData.specularTexture },
+                    { texture: this.specularTexture },
+                    [texData.specularTexture.width, texData.specularTexture.height],
+                );
+            }
+            if (texMode & WebGpu.TextureMode.NORMAL) {
+                this.normalTexture = gpu.device.createTexture({
+                    label: 'Normal texture for ' + this.wavefrontObject.name,
+                    size: [texData.normalTexture.width, texData.normalTexture.height],
+                    format: 'rgba8unorm',
+                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                });
+                gpu.device.queue.copyExternalImageToTexture(
+                    { source: texData.normalTexture },
+                    { texture: this.normalTexture },
+                    [texData.normalTexture.width, texData.normalTexture.height],
+                );
+            }
+
+            // Set default textures depending on texture mode flags
+            if ((texMode & WebGpu.TextureMode.DIFFUSE) && !(texMode & WebGpu.TextureMode.AMBIENT)) {
+                this.ambientTexture = this.diffuseTexture;
+                this.ambientOverride = true;
+            }
+        }
+
+        this.renderBG0 = gpu.device.createBindGroup({
+            label: "Local DrawableWavefrontObject render pipeline object bind group",
+            layout: gpu.pipeline.getBindGroupLayout(0),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.objectUniformBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: gpu.global_lightBuffer },
+            }, {
+                binding: 2,
+                resource: (texData.sampler === undefined) ? gpu.objectSampler : gpu[texData.sampler],
+            }, {
+                binding: 3,
+                resource: (texMode & WebGpu.TextureMode.AMBIENT || this.ambientOverride) ? this.ambientTexture.createView() : gpu.dummy_textureView,
+            }, {
+                binding: 4,
+                resource: (texMode & WebGpu.TextureMode.DIFFUSE) ? this.diffuseTexture.createView() : gpu.dummy_textureView,
+            }, {
+                binding: 5,
+                resource: (texMode & WebGpu.TextureMode.SPECULAR) ? this.specularTexture.createView() : gpu.dummy_textureView,
+            }, {
+                binding: 6,
+                resource: (texMode & WebGpu.TextureMode.NORMAL) ? this.normalTexture.createView() : gpu.dummy_textureView,
+            }],
+        });
+        this.shadowBG0 = gpu.device.createBindGroup({
+            label: "Local DrawableWavefrontObject shadow pipeline object bind group",
+            layout: gpu.shadowPipeline.getBindGroupLayout(0),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.objectUniformBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: gpu.global_lightBuffer },
+            }],
+        });
+
+        // Size of buffer is: faces * 3 vertices/face * (pos(vec3f) + normal(vec3f) + uvs(vec2f))
+        this.vertices = new Float32Array(this.wavefrontObject.faces.length*3*(3+3+2));
+        this.buildObjectVerticies();
+        this.vertexBuffer = gpu.device.createBuffer({
+            label: "Local vertex buffer for " + this.id,
+            size: this.vertices.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+        gpu.device.queue.writeBuffer(this.vertexBuffer, /*bufferOffset=*/0, this.vertices);
+    }
+
+    buildObjectVerticies() {
+        var idx = 0;
+        for (var face of this.wavefrontObject.faces) {
+            for (var vtx of face) {
+                var vIdx = vtx[0]-1, vtIdx = vtx[1]-1, vnIdx = vtx[2]-1;
+                var vertex = [
+                    ...this.wavefrontObject.vertices[vIdx],
+                    ...this.wavefrontObject.normals[vnIdx],
+                    ...this.wavefrontObject.coorduvs[vtIdx],
+                ];
+                // Float32Array has no vector-like methods
+                for (var value of vertex) {
+                    this.vertices[idx] = value;
+                    idx++;
+                }
+            }
+        }
+    }
+
+    setBindGroups(commandPass) {
+        if (gpu.renderPass === WebGpu.RenderPass.SHADOW) {
+            commandPass.setBindGroup(0, this.shadowBG0);
+            commandPass.setBindGroup(1, gpu.global_shadowBindGroup1);
+        } else if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
+            commandPass.setBindGroup(0, this.renderBG0);
+            commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
+        }
+    }
+
+    update() {
+        // Update self
+        this.move();
     }
 
     render(commandPass, offset) {

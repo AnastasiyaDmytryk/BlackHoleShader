@@ -93,7 +93,6 @@ class WavefrontImporter
         this.currentGroupParent = undefined;
         this.offsetOverride = undefined;
         this.parentOverride = undefined;
-        // TODO: texture file importing
     }
 
     // Returns a list of WaveFrontObjects parsed from the given file

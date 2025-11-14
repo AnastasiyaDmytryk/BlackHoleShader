@@ -57,7 +57,7 @@ struct CameraUniform {
 @group(1) @binding(0) var<uniform> u_camera: CameraUniform;
 
 struct ShadowUniform {
-    array: u32,
+    arrnum: u32,
     index: u32,
     passDir: u32,
 };
@@ -435,6 +435,6 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
 fn vertexShadow(@location(0) pos: vec3f, @location(1) nml: vec3f) -> @builtin(position) vec4f {
     var tform: mat4x4<f32> = u_object.transform;
     var world = (tform * vec4f(pos, 1)).xyz;
-    var ret = perspectiveProjectLight(cubemapRotate(transformLight(vec4(world, 1), u_shadow.array, u_shadow.index), u_shadow.passDir));
+    var ret = perspectiveProjectLight(cubemapRotate(transformLight(vec4(world, 1), u_shadow.arrnum, u_shadow.index), u_shadow.passDir));
     return vec4f(ret.xy * 1, ret.zw); // Fudge overlap because idk
 }
