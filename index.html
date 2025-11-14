@@ -1,0 +1,37 @@
+<!DOCTYPE HTML>
+<html lang="en">
+    <head>
+        <title>Bumpy Textures</title>
+        <!-- External library imports -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/9.3.2/math.js"></script>
+        <!-- Local file imports -->
+        <script src="GameObject.js"></script>
+        <script src="ConstantObjects.js"></script>
+        <script src="CoreGameObjects.js"></script>
+        <script src="WavefrontObjects.js"></script>
+        <script src="RenderObjects.js"></script>
+        <script src="GpuCore.js"></script>
+    </head>
+    <body style="padding: 15px;">
+        <header></header>
+
+        <!--h2>Assignment: <s>Bumpy</s> Normy Textures</h2-->
+        <!--h2>Author: Elijah Leucht</h2-->
+
+        <p> Forward/Back: W/S, Up/Down: R/F, Turn: A/D, Speed Up/Down: +/- </p>
+        <canvas id="myCanvas" width="600" height="600" style="border: 1px solid #000000;">
+            Your browser does not support canvas.
+        </canvas>
+
+        <script>
+            var canvas = document.getElementById("myCanvas");
+
+            var gpu = new WebGpu();
+            window.onkeydown = WebGpu.keyD;
+            window.onkeyup = WebGpu.keyU;
+            canvas.addEventListener("click", WebGpu.mouseH);
+        </script>
+        
+        <footer></footer>		
+    </body>
+</html>
