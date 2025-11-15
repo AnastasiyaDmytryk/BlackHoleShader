@@ -53,28 +53,32 @@ class WebGpu
             objects = objects.concat(parsed);
         }
         console.log(objects);
-        objects.forEach(o => this.createObject(
+        objects.forEach(o => this.createParentedObject(
+            this.getObjectIdByName(o.parentName),
             WebGpu.ObjectType.VISUAL, DrawableWavefrontObject, 
             o.offset.loc, o.offset.rot, o.offset.scl, o
         ));
-        objects.forEach(o => { 
-            let p = this.createObject(
-                WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
-                [15,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
-                [0, 0.005, 0], 0.005, 0, 0, undefined
-            );
-            let p2 = this.createParentedObject(
-                p.id,
-                WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
-                [10,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
-                [0, -0.005, 0], -0.01, 0, 0, undefined
-            );
-            this.createParentedObject(
-                p2.id,
-                WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
-                [-5,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
-                [0, 0.01, 0], 0.02, Math.PI/8, -Math.PI/2, undefined
-            );
+        // For testing orbits
+        objects.forEach(o => {
+            if (o.name !== 'strawberry_body__body_m' && o.name !== 'strawberry_body__heta_m') {
+                let p = this.createObject(
+                    WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
+                    [15,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
+                    [0, 0.005, 0], 0.005, 0, 0, undefined
+                );
+                let p2 = this.createParentedObject(
+                    p.id,
+                    WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
+                    [10,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
+                    [0, -0.005, 0], -0.01, 0, 0, undefined
+                );
+                this.createParentedObject(
+                    p2.id,
+                    WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
+                    [-5,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
+                    [0, 0.01, 0], 0.02, Math.PI/8, -Math.PI/2, undefined
+                );
+            }
         });
 
         requestAnimationFrame(WebGpu.mainLoop);
@@ -566,6 +570,44 @@ class WebGpu
         }
         parent.children.push(temp);
         return temp;
+    }
+
+    getObjectIdByName(name, type) {
+        switch (type) {
+            case WebGpu.ObjectType.VISUAL:
+                for (const object of Object.values(this.Visual)) {
+                    if (object.name !== undefined && object.name === name)
+                        return object.id;
+                }
+                break;
+            case WebGpu.ObjectType.SOLID:
+                for (const object of Object.values(this.Solid)) {
+                    if (object.name !== undefined && object.name === name)
+                        return object.id;
+                }
+                break;
+            case WebGpu.ObjectType.TRIGGER:
+                for (const object of Object.values(this.Trigger)) {
+                    if (object.name !== undefined && object.name === name)
+                        return object.id;
+                }
+                break;
+            default:
+                for (const object of Object.values(this.Visual)) {
+                    if (object.name !== undefined && object.name === name)
+                        return object.id;
+                }
+                for (const object of Object.values(this.Solid)) {
+                    if (object.name !== undefined && object.name === name)
+                        return object.id;
+                }
+                for (const object of Object.values(this.Trigger)) {
+                    if (object.name !== undefined && object.name === name)
+                        return object.id;
+                }
+                break;
+        }
+        return undefined;
     }
 
     destroyObject(id) {

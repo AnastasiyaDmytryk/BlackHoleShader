@@ -269,6 +269,7 @@ class DrawableWavefrontObject extends GameObject
 
         this.wavefrontObject = object;
         this.ambientOverride = false;
+        this.name = this.wavefrontObject.name;
         let texData = this.wavefrontObject.textureData;
         let texMode = texData.textureMode;
 
@@ -449,6 +450,7 @@ class DrawableWavefrontPlanet extends PlanetBase
 
         this.wavefrontObject = object;
         this.ambientOverride = false;
+        this.name = this.wavefrontObject.name;
         let texData = this.wavefrontObject.textureData;
         let texMode = texData.textureMode;
 
