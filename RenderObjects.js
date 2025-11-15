@@ -443,9 +443,9 @@ class DrawableWavefrontObject extends GameObject
 
 class DrawableWavefrontPlanet extends PlanetBase
 {
-    constructor(loc, rot, scl, object, rotSpd, polSpd, incl, offset) {
+    constructor(pol, rot, scl, object, ...args) {
         // Spread operator ensures arrays are copied
-        super([...loc], [...rot], [...scl], [...rotSpd], polSpd, incl, offset);
+        super([...pol], [...rot], [...scl], ...args);
 
         this.wavefrontObject = object;
         this.ambientOverride = false;

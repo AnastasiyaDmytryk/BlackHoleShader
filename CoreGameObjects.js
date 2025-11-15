@@ -14,10 +14,11 @@
  */
 class Polar3dGameObject extends GameObject
 {
-    constructor(pol, rot, scl) {
+    constructor(pol, rot, scl, axis) {
         super(Polar3dGameObject.sphericalToCartesian(pol), rot, scl);
         this.pol = Polar3dGameObject.clampAngles(pol); // Local polar (rho, theta, phi) offset
 		this.polVelocity = [0,0,0];
+        this.axis = axis;
     }
 
 	calculateNonrotationalOffset() {
@@ -44,6 +45,12 @@ class Polar3dGameObject extends GameObject
 		}
         this.velocity = [0,0,0]; // Override regular movement check
         this.loc = Polar3dGameObject.sphericalToCartesian(this.pol);
+        if (this.axis !== undefined && this.axis >= 0 && this.axis <= 2) {
+            let first = (this.axis + 1) % 3, second = (this.axis + 2) % 3;
+            let tmp = this.loc[first];
+            this.loc[first]= this.loc[second];
+            this.loc[second]= tmp;
+        }
         super.move();
     }
     
@@ -106,8 +113,8 @@ class Polar3dGameObject extends GameObject
  */
 class PlanetBase extends Polar3dGameObject
 {
-    constructor(pol, rot, scl, rotSpeed, polSpeed, incline, offset) {
-        super(pol, rot, scl);
+    constructor(pol, rot, scl, rotSpeed, polSpeed, incline, offset, axisMode) {
+        super(pol, rot, scl, axisMode);
         this.angVelocity = [...rotSpeed];
         this.polVelocity[1] = polSpeed;
         this.incline = incline;
