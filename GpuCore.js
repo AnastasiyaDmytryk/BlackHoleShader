@@ -38,8 +38,8 @@ class WebGpu
 
     async slowStart() {
         // Create boilerplate objects
-        //this.camera = new MovableCamera([0,0.5,2.5], [0,3.14159,0]);
-        this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
+        this.camera = new MovableCamera([0,0.5,2.5], [0,3.14159,0]);
+        // this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
         this.lights.addPointLight([-3, 3, -3], [0.8,0.8,0.8]);
@@ -61,19 +61,19 @@ class WebGpu
             let p = this.createObject(
                 WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
                 [15,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
-                [0, 0.005, 0], [0, 0.005, 0]
+                [0, 0.005, 0], 0.005, 0, 0
             );
             let p2 = this.createParentedObject(
                 p.id,
                 WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
                 [10,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
-                [0, -0.01, 0], [0, -0.005, 0]
+                [0, -0.005, 0], -0.01, 0, 0
             );
             this.createParentedObject(
                 p2.id,
                 WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
                 [-5,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
-                [0, 0.02, 0], [0, 0.01, 0]
+                [0, 0.01, 0], 0.02, Math.PI/8, -Math.PI/2
             );
         });
 

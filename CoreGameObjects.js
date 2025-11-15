@@ -106,10 +106,19 @@ class Polar3dGameObject extends GameObject
  */
 class PlanetBase extends Polar3dGameObject
 {
-    constructor(pol, rot, scl, polSpeed, rotSpeed) {
+    constructor(pol, rot, scl, rotSpeed, polSpeed, incline, offset) {
         super(pol, rot, scl);
-        this.polVelocity = polSpeed;
-        this.angVelocity = rotSpeed;
+        this.angVelocity = [...rotSpeed];
+        this.polVelocity[1] = polSpeed;
+        this.incline = incline;
+        this.offset = offset;
+    }
+
+    update() {
+        // Update self
+        this.polVelocity[2] = 0;
+        this.pol[2] = Math.PI/2 + this.incline * Math.cos(this.offset + this.pol[1] % (2*Math.PI));
+        this.move();
     }
 }
 

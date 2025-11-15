@@ -419,9 +419,7 @@ class DrawableWavefrontObject extends GameObject
         }
     }
 
-    update() {
-        // Update self
-    }
+    update() {}
 
     render(commandPass, offset) {
         // Render self
@@ -445,9 +443,9 @@ class DrawableWavefrontObject extends GameObject
 
 class DrawableWavefrontPlanet extends PlanetBase
 {
-    constructor(loc, rot, scl, object, polSpd, rotSpd) {
+    constructor(loc, rot, scl, object, rotSpd, polSpd, incl, offset) {
         // Spread operator ensures arrays are copied
-        super([...loc], [...rot], [...scl], [...polSpd], [...rotSpd]);
+        super([...loc], [...rot], [...scl], [...rotSpd], polSpd, incl, offset);
 
         this.wavefrontObject = object;
         this.ambientOverride = false;
@@ -599,11 +597,6 @@ class DrawableWavefrontPlanet extends PlanetBase
             commandPass.setBindGroup(0, this.renderBG0);
             commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
         }
-    }
-
-    update() {
-        // Update self
-        this.move();
     }
 
     render(commandPass, offset) {
