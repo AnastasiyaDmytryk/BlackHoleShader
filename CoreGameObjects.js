@@ -7,6 +7,30 @@
 
 
 /**
+ * Seeded random number generator.
+ */
+class Srandom
+{
+    constructor(seed) {
+        this.rngSeed = seed;
+    }
+
+    static seededRandom(rngSeed) {
+        let seed = rngSeed % 2147483647; // Ensure positive 32-bit integer
+        if (seed <= 0) seed += 2147483646;
+        // LCG formula: z = (a * z + c) % m
+        seed = (seed * 16807) % 2147483647;
+        return seed;
+    }
+
+    next() {
+        this.rngSeed = Srandom.seededRandom(this.rngSeed);
+        return (this.rngSeed - 1) / 2147483646;  // Normalize to a float between 0 and 1
+    }
+}
+
+
+/**
  * Game object using 3D polar (spherical) coordinates.
  * 
  * Overrides the move() method to use the (rho, theta, phi) tuple 
@@ -14,10 +38,11 @@
  */
 class Polar3dGameObject extends GameObject
 {
-    constructor(pol, rot, scl) {
+    constructor(pol, rot, scl, axis) {
         super(Polar3dGameObject.sphericalToCartesian(pol), rot, scl);
         this.pol = Polar3dGameObject.clampAngles(pol); // Local polar (rho, theta, phi) offset
 		this.polVelocity = [0,0,0];
+        this.axis = axis;
     }
 
 	calculateNonrotationalOffset() {
@@ -44,6 +69,12 @@ class Polar3dGameObject extends GameObject
 		}
         this.velocity = [0,0,0]; // Override regular movement check
         this.loc = Polar3dGameObject.sphericalToCartesian(this.pol);
+        if (this.axis !== undefined && this.axis >= 0 && this.axis <= 2) {
+            let first = (this.axis + 1) % 3, second = (this.axis + 2) % 3;
+            let tmp = this.loc[first];
+            this.loc[first]= this.loc[second];
+            this.loc[second]= tmp;
+        }
         super.move();
     }
     
@@ -106,10 +137,19 @@ class Polar3dGameObject extends GameObject
  */
 class PlanetBase extends Polar3dGameObject
 {
-    constructor(pol, rot, scl, polSpeed, rotSpeed) {
-        super(pol, rot, scl);
-        this.polVelocity = polSpeed;
-        this.angVelocity = rotSpeed;
+    constructor(pol, rot, scl, rotSpeed, polSpeed, incline, offset, axisMode) {
+        super(pol, rot, scl, axisMode);
+        this.angVelocity = [...rotSpeed];
+        this.polVelocity[1] = polSpeed;
+        this.incline = incline;
+        this.offset = offset;
+    }
+
+    update() {
+        // Update self
+        this.polVelocity[2] = 0;
+        this.pol[2] = Math.PI/2 + this.incline * Math.cos(this.offset + this.pol[1] % (2*Math.PI));
+        this.move();
     }
 }
 

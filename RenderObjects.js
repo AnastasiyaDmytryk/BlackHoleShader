@@ -261,6 +261,37 @@ class LightSystem
 }
 
 
+class Orrery
+{
+    static numPlanets = 0;
+    static rng = new Srandom(4257);
+
+    static addPlanet(objects, parentId, type, prefab) {
+        let pnum = ++Orrery.numPlanets;
+        if (parentId === undefined) {
+            let pol = [pnum * 10, 2*Math.PI * Orrery.rng.next(), 0];
+            let rot = objects[0].offset.rot;
+            let scl = objects[0].offset.scl;
+            let rotSpeed = [0, -0.005 / pnum, 0];
+            let polSpeed = 0.0005 + 0.003 / pnum;
+            let incline = (pnum % 6 === 0) ? Math.PI/8 : Math.PI/32 * Orrery.rng.next();
+            let offset = 2*Math.PI * Orrery.rng.next();
+            let axisMode = undefined;
+            objects.forEach(object => {
+                // pol, rot, scl, object, rotSpeed, polSpeed, incline, offset, axisMode
+                gpu.createParentedObject(
+                    parentId, type, prefab, pol, rot, scl, object,
+                    rotSpeed, polSpeed, incline, offset, axisMode
+                );
+            });
+        } else {
+            // TODO
+            console.error('TODO: Planet parenting');
+        }
+    }
+}
+
+
 class DrawableWavefrontObject extends GameObject
 {
     constructor(loc, rot, scl, object) {
@@ -269,6 +300,7 @@ class DrawableWavefrontObject extends GameObject
 
         this.wavefrontObject = object;
         this.ambientOverride = false;
+        this.name = this.wavefrontObject.name;
         let texData = this.wavefrontObject.textureData;
         let texMode = texData.textureMode;
 
@@ -419,9 +451,7 @@ class DrawableWavefrontObject extends GameObject
         }
     }
 
-    update() {
-        // Update self
-    }
+    update() {}
 
     render(commandPass, offset) {
         // Render self
@@ -445,12 +475,13 @@ class DrawableWavefrontObject extends GameObject
 
 class DrawableWavefrontPlanet extends PlanetBase
 {
-    constructor(loc, rot, scl, object, polSpd, rotSpd) {
+    constructor(pol, rot, scl, object, ...args) {
         // Spread operator ensures arrays are copied
-        super([...loc], [...rot], [...scl], [...polSpd], [...rotSpd]);
+        super([...pol], [...rot], [...scl], ...args);
 
         this.wavefrontObject = object;
         this.ambientOverride = false;
+        this.name = this.wavefrontObject.name;
         let texData = this.wavefrontObject.textureData;
         let texMode = texData.textureMode;
 
@@ -599,11 +630,6 @@ class DrawableWavefrontPlanet extends PlanetBase
             commandPass.setBindGroup(0, this.renderBG0);
             commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
         }
-    }
-
-    update() {
-        // Update self
-        this.move();
     }
 
     render(commandPass, offset) {
