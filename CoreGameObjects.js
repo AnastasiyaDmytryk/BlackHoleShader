@@ -7,6 +7,30 @@
 
 
 /**
+ * Seeded random number generator.
+ */
+class Srandom
+{
+    constructor(seed) {
+        this.rngSeed = seed;
+    }
+
+    static seededRandom(rngSeed) {
+        let seed = rngSeed % 2147483647; // Ensure positive 32-bit integer
+        if (seed <= 0) seed += 2147483646;
+        // LCG formula: z = (a * z + c) % m
+        seed = (seed * 16807) % 2147483647;
+        return seed;
+    }
+
+    next() {
+        this.rngSeed = Srandom.seededRandom(this.rngSeed);
+        return (this.rngSeed - 1) / 2147483646;  // Normalize to a float between 0 and 1
+    }
+}
+
+
+/**
  * Game object using 3D polar (spherical) coordinates.
  * 
  * Overrides the move() method to use the (rho, theta, phi) tuple 

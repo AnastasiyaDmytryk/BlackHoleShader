@@ -38,18 +38,18 @@ class WebGpu
 
     async slowStart() {
         // Create boilerplate objects
-        // this.camera = new MovableCamera([0,0.5,2.5], [0,3.14159,0]);
-        this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
+        this.camera = new MovableCamera([0,0.5,15], [0,3.14159,0]);
+        // this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
         this.lights.addPointLight([-3, 3, -3], [0.8,0.8,0.8]);
-        this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.87);
+        this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.1);
         this.root = new Root();
 
-        var objects = []
+        var objects = [];
         for (const key of Constants.MODELS) {
             var importer = new WavefrontImporter();
-            let parsed = await importer.parse('./Models/' + key);
+            let parsed = await importer.parse('./Models/Static/' + key);
             objects = objects.concat(parsed);
         }
         console.log(objects);
@@ -58,28 +58,18 @@ class WebGpu
             WebGpu.ObjectType.VISUAL, DrawableWavefrontObject, 
             o.offset.loc, o.offset.rot, o.offset.scl, o
         ));
-        // For testing orbits
-        objects.forEach(o => {
-            if (o.name !== 'strawberry_body__body_m' && o.name !== 'strawberry_body__heta_m') {
-                let p = this.createObject(
-                    WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
-                    [15,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
-                    [0, 0.005, 0], 0.005, 0, 0, undefined
-                );
-                let p2 = this.createParentedObject(
-                    p.id,
-                    WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
-                    [10,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
-                    [0, -0.005, 0], -0.01, 0, 0, undefined
-                );
-                this.createParentedObject(
-                    p2.id,
-                    WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet, 
-                    [-5,0,Math.PI/2], o.offset.rot, o.offset.scl, o, 
-                    [0, 0.01, 0], 0.02, Math.PI/8, -Math.PI/2, undefined
-                );
-            }
-        });
+
+        var planets = [];
+        for (const key of Constants.PLANETS) {
+            var importer = new WavefrontImporter();
+            let parsed = await importer.parse('./Models/Planet/' + key);
+            planets.push(parsed);
+        }
+        console.log(planets);
+        planets.forEach(p => Orrery.addPlanet(
+            p, this.getObjectIdByName(p.parentName),
+            WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet
+        ));
 
         requestAnimationFrame(WebGpu.mainLoop);
     }

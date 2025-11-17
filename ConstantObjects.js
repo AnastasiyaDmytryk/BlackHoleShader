@@ -92,4 +92,9 @@ class Constants
     static MODELS = [
         'Chappy', 'Strawberry'
     ];
+    static PLANETS = [
+        'Battlerock', 'BuoyBase', 'Dreadnought',
+        'DustyDune', 'Freezeflame', 'GustyGarden',
+        'MeltyMolten', 'SeaSlide'
+    ];
 }
