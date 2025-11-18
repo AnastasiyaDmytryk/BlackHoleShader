@@ -23,6 +23,7 @@ struct ObjectUniform {      // size 128
 };
 @group(0) @binding(0) var<uniform> u_object: ObjectUniform;
 
+
 struct DirLight {     // size 32
     direction: vec3f, // byte 0
     color: vec3f,     // byte 16
@@ -47,44 +48,25 @@ struct LightUniform {    // size 512+10*48=992
     pointLights: array<PointLight, 3>, // byte 32+5*32=192
     spotLights: array<SpotLight, 3>, // byte 192+10*32=512
 };
-@group(0) @binding(1) var<uniform> u_lights: LightUniform;
+@group(1) @binding(0) var<uniform> u_lights: LightUniform;
 
 
 struct CameraUniform {
     translation: vec4f,
     rotation: vec4f,
 };
-@group(1) @binding(0) var<uniform> u_camera: CameraUniform;
-
-struct ShadowUniform {
-    arrnum: u32,
-    index: u32,
-    passDir: u32,
-};
-@group(1) @binding(1) var<uniform> u_shadow: ShadowUniform;
+@group(2) @binding(0) var<uniform> u_camera: CameraUniform;
 
 
 // Non-uniform binding definitions
-@group(0) @binding(2) var g_objectSampler: sampler;
-@group(0) @binding(3) var g_ambientTexture: texture_2d<f32>;
-@group(0) @binding(4) var g_diffuseTexture: texture_2d<f32>;
-@group(0) @binding(5) var g_specularTexture: texture_2d<f32>;
-@group(0) @binding(6) var g_normalTexture: texture_2d<f32>;
-
-@group(2) @binding(0) var g_shadowSampler: sampler_comparison;
-@group(2) @binding(1) var g_pointShadowMap: texture_depth_cube_array;
-@group(2) @binding(2) var g_spotShadowMap: texture_depth_cube_array;
+@group(0) @binding(1) var g_objectSampler: sampler;
+@group(0) @binding(2) var g_ambientTexture: texture_2d<f32>;
+@group(0) @binding(3) var g_diffuseTexture: texture_2d<f32>;
+@group(0) @binding(4) var g_specularTexture: texture_2d<f32>;
+@group(0) @binding(5) var g_normalTexture: texture_2d<f32>;
 
 
 // Other struct definitions
-struct ShadowInfo {
-    // TODO: pass as constants
-    pointShadows: array<vec4f, 3>,
-    spotShadows: array<vec4f, 3>,
-    pointVisibility: array<f32, 3>,
-    spotVisibility: array<f32, 3>,
-};
-
 struct FragmentParams {
     @builtin(position) position: vec4f,
     @location(0) normal: vec3f,
@@ -283,7 +265,6 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
 
     // TODO: pass as constants
     let max_light: u32 = 3;
-    let max_shadow: u32 = 1;
 
     // Normal mapping
     let sampleNormal: vec4f = textureSample(g_normalTexture, g_objectSampler, params.texuv);
@@ -303,53 +284,6 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
     var iterations: u32;
     var iIlluminance: f32;
     var iFocus: f32;
-
-    // Shadow visibility computation
-    var shadows: ShadowInfo;
-    var face: u32;
-    var lightView: vec4f;
-    var direction: vec3f;
-    var offset: vec3f;
-    iterations = min(u_lights.numPointLights, max_light);
-    for (var i = 0u; i < iterations; i++) {
-        face = cubemapDirection(params.world, u_lights.pointLights[i].position);
-        lightView = perspectiveProjectLight(cubemapRotate(transformLight(vec4(params.world, 1), 0, i), face));
-        shadows.pointShadows[i] = lightView / lightView.w;
-    }
-    iterations = min(u_lights.numSpotLights, max_light);
-    for (var i = 0u; i < iterations; i++) {
-        face = cubemapDirection(params.world, u_lights.spotLights[i].position);
-        lightView = perspectiveProjectLight(cubemapRotate(transformLight(vec4(params.world, 1), 1, i), face));
-        shadows.spotShadows[i] = lightView / lightView.w;
-    }
-    // Set visibility for shadowing lights
-    for (var i = 0u; i < max_shadow; i++) {
-        direction = vec3f(params.world.xyz - u_lights.pointLights[i].position);
-        for (var x = -1; x <= 1; x++) {
-            for (var y = -1; y <= 1; y++) {
-                for (var z = -1; z <= 1; z++) {
-                    offset = vec3f(f32(x),f32(y),f32(z)) / (1200.0);
-                    shadows.pointVisibility[i] += textureSampleCompare(g_pointShadowMap, g_shadowSampler, normalize(direction) + offset, i, shadows.pointShadows[i].z - 0.01);
-        }}}
-        shadows.pointVisibility[i] /= 27.0;
-    }
-    for (var i = 0u; i < max_shadow; i++) {
-        direction = vec3f(params.world.xyz - u_lights.spotLights[i].position);
-        for (var x = -1; x <= 1; x++) {
-            for (var y = -1; y <= 1; y++) {
-                for (var z = -1; z <= 1; z++) {
-                    offset = vec3f(f32(x),f32(y),f32(z)) / (1200.0);
-                    shadows.spotVisibility[i] += textureSampleCompare(g_spotShadowMap, g_shadowSampler, normalize(direction) + offset, i, shadows.spotShadows[i].z - 0.01);
-        }}}
-        shadows.spotVisibility[i] /= 27.0;
-    }
-    // Set visibility for non-shadowing lights to 1
-    for (var i = max_shadow; i < max_light; i++) {
-        shadows.pointVisibility[i] = 1;
-    }
-    for (var i = max_shadow; i < max_light; i++) {
-        shadows.spotVisibility[i] = 1;
-    }
 
     // Directional lights
     var dirLight: DirLight;
@@ -373,14 +307,14 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
         // Diffuse light
         iIlluminance = max(dot(normal, toSource), 0.0);
         iIlluminance /= (1 + 3 * pow(length(toSource), 2));
-        iDiffuse += pointLight.color.rgb * iIlluminance * shadows.pointVisibility[i];
+        iDiffuse += pointLight.color.rgb * iIlluminance;
         // Specular light
         if (iIlluminance > 0.1 && u_object.material.shine != 0.0) {
             reflect = normalize(reflectVec(-toSource, normal).xyz);
             //iHalfVec = half(-toSource, toViewer);
             iIlluminance = pow(max(dot(reflect, toViewer), 0.0), u_object.material.shine);
             iIlluminance /= (1 + 3 * pow(length(toSource), 2));
-            iSpecular += pointLight.color.rgb * iIlluminance * shadows.pointVisibility[i];
+            iSpecular += pointLight.color.rgb * iIlluminance;
         }
     }
 
@@ -397,14 +331,14 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
 
         // Diffuse light
         iIlluminance = max(dot(normal, toSource), 0.0);
-        iDiffuse += spotLight.color.rgb * iIlluminance * shadows.spotVisibility[i];
+        iDiffuse += spotLight.color.rgb * iIlluminance;
         // Specular light
         if (iIlluminance > 0.1 && u_object.material.shine != 0.0) {
             reflect = normalize(reflectVec(-toSource, normal).xyz);
             //iHalfVec = half(-toSource, toViewer);
             iIlluminance = pow(max(dot(reflect, toViewer), 0.0), u_object.material.shine);
             iIlluminance /= (0.1 + length(toSource));
-            iSpecular += spotLight.color.rgb * iIlluminance * shadows.spotVisibility[i];
+            iSpecular += spotLight.color.rgb * iIlluminance;
         }
     }
 
@@ -427,14 +361,4 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
 
     // Phong model: TotalColor = kA * iA + kD * iD + kS * iS
     return vec4f(final_ka*iAmbient + final_kd*iDiffuse + final_ks*iSpecular, sampleDiffuse.a);
-}
-
-
-// Shadow vertex shader entry point
-@vertex
-fn vertexShadow(@location(0) pos: vec3f, @location(1) nml: vec3f) -> @builtin(position) vec4f {
-    var tform: mat4x4<f32> = u_object.transform;
-    var world = (tform * vec4f(pos, 1)).xyz;
-    var ret = perspectiveProjectLight(cubemapRotate(transformLight(vec4(world, 1), u_shadow.arrnum, u_shadow.index), u_shadow.passDir));
-    return vec4f(ret.xy * 1, ret.zw); // Fudge overlap because idk
 }
