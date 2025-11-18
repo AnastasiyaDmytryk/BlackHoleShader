@@ -15,8 +15,7 @@ class WebGpu
     });
     static RenderPass = Object.freeze({
         NONE: 0,
-        SHADOW: 1,
-        RENDER: 2,
+        RENDER: 1,
     });
     static TextureMode = Object.freeze({
         NONE: 0,
@@ -42,7 +41,7 @@ class WebGpu
         // this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
-        this.lights.addPointLight([-3, 3, -3], [0.8,0.8,0.8]);
+        this.lights.addPointLight([0, 0, 0], [2,2,2]);
         this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.1);
         this.root = new Root();
 
@@ -67,8 +66,7 @@ class WebGpu
         }
         console.log(planets);
         planets.forEach(p => Orrery.addPlanet(
-            p, this.getObjectIdByName(p.parentName),
-            WebGpu.ObjectType.VISUAL, DrawableWavefrontPlanet
+            p, this.getObjectIdByName(p.parentName), WebGpu.ObjectType.VISUAL
         ));
 
         requestAnimationFrame(WebGpu.mainLoop);
@@ -99,21 +97,6 @@ class WebGpu
             usage: GPUTextureUsage.RENDER_ATTACHMENT,
         });
         this.depthTextureView = this.depthTexture.createView();
-        this.shadowPointDepthTexture = this.device.createTexture({
-            label: "Depth texture for point shadows",
-            size: [this.canvas.width * 2, this.canvas.height * 2, Constants.MAX_LIGHT_NUM.POINT*6],
-            format: "depth32float",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        this.shadowPointDepthTextureCubeArrayView = this.shadowPointDepthTexture.createView({ dimension: "cube-array" });
-        this.shadowSpotDepthTexture = this.device.createTexture({
-            label: "Depth texture for spot shadows",
-            size: [this.canvas.width * 2, this.canvas.height * 2, Constants.MAX_LIGHT_NUM.SPOT*6],
-            format: "depth32float",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        this.shadowSpotDepthTextureCubeArrayView = this.shadowSpotDepthTexture.createView({ dimension: "cube-array" });
-        this.shadowDepthTextureSampler = this.device.createSampler({ compare: "less" });
         this.objectSampler = this.device.createSampler({
             addressModeU: 'repeat',
             addressModeV: 'repeat',
@@ -122,12 +105,12 @@ class WebGpu
         });
 
         // Create a basic shader
-        let shaderCode = await fetch('ShaderModule.wgsl').then(f=>f.text());
+        let renderShaderCode = await fetch('RenderShaderModule.wgsl').then(f=>f.text());
         this.cellShaderModule = this.device.createShaderModule({
-            label: "Simple Shader",
-            code: shaderCode,
+            label: "Render Shader",
+            code: renderShaderCode,
         });
-        console.log("Created a simple shader.");
+        console.log("Created the rendering shader.");
 
         // Define the vertex buffer layout
         this.vertexBufferLayout = {
@@ -160,11 +143,11 @@ class WebGpu
             }, {
                 binding: 1,
                 visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                buffer: { type: "uniform" },
+                sampler: {},
             }, {
                 binding: 2,
                 visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                sampler: {},
+                texture: {},
             }, {
                 binding: 3,
                 visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
@@ -177,10 +160,14 @@ class WebGpu
                 binding: 5,
                 visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                 texture: {},
-            }, {
-                binding: 6,
+            }],
+        });
+        this.lightBindGroupLayout = this.device.createBindGroupLayout({
+            label: "Light bind group layout",
+            entries: [{
+                binding: 0,
                 visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                texture: {},
+                buffer: { type: "uniform" },
             }],
         });
         this.sceneBindGroupLayout = this.device.createBindGroupLayout({
@@ -189,35 +176,14 @@ class WebGpu
                 binding: 0,
                 visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                 buffer: { type: "uniform" },
-            }, {
-                binding: 1,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                buffer: { type: "uniform" },
             }],
-        });
-        this.shadowBindGroupLayout = this.device.createBindGroupLayout({
-            label: "Shadow bind group layout",
-            entries: [{
-                binding: 0,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                sampler: { type: "comparison" },
-            }, {
-                binding: 1,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                texture: { sampleType: "depth", viewDimension: "cube-array" },
-            }, {
-                binding: 2,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                texture: { sampleType: "depth", viewDimension: "cube-array" },
-            }]
         });
 
         // Create the pipelines
         this.pipeline = this.device.createRenderPipeline({
-            label: "Simple Pipeline",
-            // Main render pass needs a manual layout because it reads from the shadow depth texture
+            label: "Render Pipeline",
             layout: this.device.createPipelineLayout({
-                bindGroupLayouts: [this.objectBindGroupLayout, this.sceneBindGroupLayout, this.shadowBindGroupLayout],
+                bindGroupLayouts: [this.objectBindGroupLayout, this.lightBindGroupLayout, this.sceneBindGroupLayout],
             }),
             vertex: {
                 module: this.cellShaderModule,
@@ -241,21 +207,6 @@ class WebGpu
                 depthCompare: "less",
             },
         });
-        this.shadowPipeline = this.device.createRenderPipeline({
-            label: "Shadow Pipeline",
-            // Shadow render pass can use auto layout because it uses uniforms only
-            layout: "auto",
-            vertex: {
-                module: this.cellShaderModule,
-                entryPoint: "vertexShadow",
-                buffers: [this.vertexBufferLayout],
-            },
-            depthStencil: {
-                format: "depth32float",
-                depthWriteEnabled: true,
-                depthCompare: "less",
-            },
-        });
         console.log("Created a pipeline.");
 
         this.setupGlobals();
@@ -268,11 +219,6 @@ class WebGpu
         this.global_lightBuffer = this.device.createBuffer({
             label: "Global light buffer",
             size: Constants.SIZE.LIGHT_UNIFORM,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-        this.global_shadowBuffer = this.device.createBuffer({
-            label: "Global shadow buffer",
-            size: Constants.SIZE.SHADOW_UNIFORM,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
@@ -312,10 +258,10 @@ class WebGpu
                 resource: { buffer: this.dummy_objectBuffer },
             }, {
                 binding: 1,
-                resource: { buffer: this.global_lightBuffer },
+                resource: this.objectSampler,
             }, {
                 binding: 2,
-                resource: this.objectSampler,
+                resource: this.dummy_textureView,
             }, {
                 binding: 3,
                 resource: this.dummy_textureView,
@@ -325,53 +271,22 @@ class WebGpu
             }, {
                 binding: 5,
                 resource: this.dummy_textureView,
-            }, {
-                binding: 6,
-                resource: this.dummy_textureView,
             }],
         });
         this.global_renderBindGroup1 = this.device.createBindGroup({
-            label: "Global render pipeline scene bind group",
+            label: "Global render pipeline light bind group",
             layout: this.pipeline.getBindGroupLayout(1),
             entries: [{
                 binding: 0,
-                resource: { buffer: this.dummy_cameraBuffer },
-            }, {
-                binding: 1,
-                resource: { buffer: this.global_shadowBuffer },
-            }],
-        });
-        this.global_renderBindGroup2 = this.device.createBindGroup({
-            label: "Global render pipeline shadow bind group",
-            layout: gpu.pipeline.getBindGroupLayout(2),
-            entries: [{
-                binding: 0,
-                resource: this.shadowDepthTextureSampler,
-            }, {
-                binding: 1,
-                resource: this.shadowPointDepthTextureCubeArrayView,
-            }, {
-                binding: 2,
-                resource: this.shadowSpotDepthTextureCubeArrayView,
-            }],
-        });
-        this.global_shadowBindGroup0 = this.device.createBindGroup({
-            label: "Global shadow pipeline object bind group",
-            layout: this.shadowPipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.dummy_objectBuffer },
-            }, {
-                binding: 1,
                 resource: { buffer: this.global_lightBuffer },
             }],
-        });
-        this.global_shadowBindGroup1 = this.device.createBindGroup({
-            label: "Global shadow pipeline scene bind group",
-            layout: this.shadowPipeline.getBindGroupLayout(1),
+        })
+        this.global_renderBindGroup2 = this.device.createBindGroup({
+            label: "Global render pipeline scene bind group",
+            layout: this.pipeline.getBindGroupLayout(2),
             entries: [{
-                binding: 1,
-                resource: { buffer: this.global_shadowBuffer },
+                binding: 0,
+                resource: { buffer: this.dummy_cameraBuffer },
             }],
         });
 
@@ -386,75 +301,14 @@ class WebGpu
     }
     
     renderAll() {
+        // TODO: determine if this variable makes sense and remove/update
         this.renderPass = WebGpu.RenderPass.NONE;
-        this.renderPassNum = 0;
         var encoder = undefined;
         var commandBuffer = undefined;
-        var shadowCommandPass = undefined, renderCommandPass = undefined;
-        
-        // Begin shadow passes for cubemap renders
-        this.renderPass = WebGpu.RenderPass.SHADOW;
-        // Begin point light passes
-        this.device.queue.writeBuffer(this.global_shadowBuffer, Constants.OFFSET.SHADOW_UNIFORM.ARRAY, new Uint32Array([0]));
-        for (let light = 0; light < Constants.MAX_LIGHT_NUM.SHADOWED_POINT; light++) {
-            for (let face = 0; face < 6; face++) {
-                // Begin shadow pass
-                this.device.queue.writeBuffer(this.global_shadowBuffer, Constants.OFFSET.SHADOW_UNIFORM.INDEX, new Uint32Array([light]));
-                this.device.queue.writeBuffer(this.global_shadowBuffer, Constants.OFFSET.SHADOW_UNIFORM.PASS_DIR, new Uint32Array([face]));
-                encoder = this.device.createCommandEncoder();
-                shadowCommandPass = encoder.beginRenderPass({
-                    label: "Point shadow command pass " + light + " " + face,
-                    colorAttachments: [],
-                    depthStencilAttachment: {
-                        view: this.shadowPointDepthTexture.createView({ dimension: "2d", baseArrayLayer: light*6 + face }),
-                        depthClearValue: 1.0,
-                        depthLoadOp: "clear",
-                        depthStoreOp: "store",
-                    },
-                });
-                shadowCommandPass.setPipeline(this.shadowPipeline);
-                // Draw objects
-                this.lights.render(shadowCommandPass);
-                this.root.render(shadowCommandPass);
-                // End shadow pass
-                shadowCommandPass.end();
-                commandBuffer = encoder.finish();
-                this.device.queue.submit([commandBuffer]);
-            }
-        }
-        // Begin spot light passes
-        this.device.queue.writeBuffer(this.global_shadowBuffer, Constants.OFFSET.SHADOW_UNIFORM.ARRAY, new Uint32Array([1]));
-        for (let light = 0; light < Constants.MAX_LIGHT_NUM.SHADOWED_SPOT; light++) {
-            for (let face = 0; face < 6; face++) {
-                // Begin shadow pass
-                this.device.queue.writeBuffer(this.global_shadowBuffer, Constants.OFFSET.SHADOW_UNIFORM.INDEX, new Uint32Array([light]));
-                this.device.queue.writeBuffer(this.global_shadowBuffer, Constants.OFFSET.SHADOW_UNIFORM.PASS_DIR, new Uint32Array([face]));
-                encoder = this.device.createCommandEncoder();
-                shadowCommandPass = encoder.beginRenderPass({
-                    label: "Spot shadow command pass " + light + " " + face,
-                    colorAttachments: [],
-                    depthStencilAttachment: {
-                        view: this.shadowSpotDepthTexture.createView({ dimension: "2d", baseArrayLayer: light*6 + face }),
-                        depthClearValue: 1.0,
-                        depthLoadOp: "clear",
-                        depthStoreOp: "store",
-                    },
-                });
-                shadowCommandPass.setPipeline(this.shadowPipeline);
-                // Draw objects
-                this.lights.render(shadowCommandPass);
-                this.root.render(shadowCommandPass);
-                // End shadow pass
-                shadowCommandPass.end();
-                commandBuffer = encoder.finish();
-                this.device.queue.submit([commandBuffer]);
-            }
-        }
+        var renderCommandPass = undefined;
 
         // Begin main rendering pass
         this.renderPass = WebGpu.RenderPass.RENDER;
-        this.renderPassNum = 0;
-        this.device.queue.writeBuffer(this.global_shadowBuffer, Constants.OFFSET.SHADOW_UNIFORM.PASS_DIR, new Uint32Array([this.renderPassNum]));
         encoder = this.device.createCommandEncoder();
         renderCommandPass = encoder.beginRenderPass({
             label: "Rendering command pass",

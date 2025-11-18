@@ -19,15 +19,12 @@ class Camera extends CameraBase
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        this.renderBG1 = gpu.device.createBindGroup({
+        this.renderBG2 = gpu.device.createBindGroup({
             label: "Local Camera bind group",
-            layout: gpu.pipeline.getBindGroupLayout(1),
+            layout: gpu.pipeline.getBindGroupLayout(2),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.cameraUniformBuffer },
-            }, {
-                binding: 1,
-                resource: { buffer: gpu.global_shadowBuffer },
             }],
         });
 
@@ -36,10 +33,8 @@ class Camera extends CameraBase
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.SHADOW) {
-            // Cameras do not render during the shadow pass
-        } else if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(1, this.renderBG1);
+        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
+            commandPass.setBindGroup(2, this.renderBG2);
         }
     }
 
@@ -48,7 +43,6 @@ class Camera extends CameraBase
     render(commandPass) {
         // Render self
         this.setBindGroups(commandPass);
-        commandPass.setBindGroup(1, this.renderBG1);
         gpu.device.queue.writeBuffer(this.cameraUniformBuffer, Constants.OFFSET.CAMERA_UNIFORM.TRANSLATION, new Float32Array(this.loc));
         gpu.device.queue.writeBuffer(this.cameraUniformBuffer, Constants.OFFSET.CAMERA_UNIFORM.ROTATION, new Float32Array(this.rot));
     }
@@ -231,10 +225,7 @@ class LightSystem
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.SHADOW) {
-            commandPass.setBindGroup(0, gpu.global_shadowBindGroup0);
-            commandPass.setBindGroup(1, gpu.global_shadowBindGroup1);
-        } else if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
+        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
             commandPass.setBindGroup(0, gpu.global_renderBindGroup0);
             commandPass.setBindGroup(1, gpu.global_renderBindGroup1);
             commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
@@ -266,7 +257,7 @@ class Orrery
     static numPlanets = 0;
     static rng = new Srandom(4257);
 
-    static addPlanet(objects, parentId, type, prefab) {
+    static addPlanet(objects, parentId, type) {
         let pnum = ++Orrery.numPlanets;
         if (parentId === undefined) {
             let pol = [pnum * 10, 2*Math.PI * Orrery.rng.next(), 0];
@@ -274,13 +265,13 @@ class Orrery
             let scl = objects[0].offset.scl;
             let rotSpeed = [0, -0.005 / pnum, 0];
             let polSpeed = 0.0005 + 0.003 / pnum;
-            let incline = (pnum % 6 === 0) ? Math.PI/8 : Math.PI/32 * Orrery.rng.next();
+            let incline = (pnum % 6 === 0) ? Math.PI/8 : Math.PI/24 * Orrery.rng.next();
             let offset = 2*Math.PI * Orrery.rng.next();
             let axisMode = undefined;
             objects.forEach(object => {
                 // pol, rot, scl, object, rotSpeed, polSpeed, incline, offset, axisMode
                 gpu.createParentedObject(
-                    parentId, type, prefab, pol, rot, scl, object,
+                    parentId, type, DrawableWavefrontPlanet, pol, rot, scl, object,
                     rotSpeed, polSpeed, incline, offset, axisMode
                 );
             });
@@ -381,33 +372,19 @@ class DrawableWavefrontObject extends GameObject
                 resource: { buffer: this.objectUniformBuffer },
             }, {
                 binding: 1,
-                resource: { buffer: gpu.global_lightBuffer },
-            }, {
-                binding: 2,
                 resource: (texData.sampler === undefined) ? gpu.objectSampler : gpu[texData.sampler],
             }, {
-                binding: 3,
+                binding: 2,
                 resource: (texMode & WebGpu.TextureMode.AMBIENT || this.ambientOverride) ? this.ambientTexture.createView() : gpu.dummy_textureView,
             }, {
-                binding: 4,
+                binding: 3,
                 resource: (texMode & WebGpu.TextureMode.DIFFUSE) ? this.diffuseTexture.createView() : gpu.dummy_textureView,
             }, {
-                binding: 5,
+                binding: 4,
                 resource: (texMode & WebGpu.TextureMode.SPECULAR) ? this.specularTexture.createView() : gpu.dummy_textureView,
             }, {
-                binding: 6,
+                binding: 5,
                 resource: (texMode & WebGpu.TextureMode.NORMAL) ? this.normalTexture.createView() : gpu.dummy_textureView,
-            }],
-        });
-        this.shadowBG0 = gpu.device.createBindGroup({
-            label: "Local DrawableWavefrontObject shadow pipeline object bind group",
-            layout: gpu.shadowPipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.objectUniformBuffer },
-            }, {
-                binding: 1,
-                resource: { buffer: gpu.global_lightBuffer },
             }],
         });
 
@@ -442,12 +419,8 @@ class DrawableWavefrontObject extends GameObject
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.SHADOW) {
-            commandPass.setBindGroup(0, this.shadowBG0);
-            commandPass.setBindGroup(1, gpu.global_shadowBindGroup1);
-        } else if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
+        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
             commandPass.setBindGroup(0, this.renderBG0);
-            commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
         }
     }
 
@@ -562,33 +535,19 @@ class DrawableWavefrontPlanet extends PlanetBase
                 resource: { buffer: this.objectUniformBuffer },
             }, {
                 binding: 1,
-                resource: { buffer: gpu.global_lightBuffer },
-            }, {
-                binding: 2,
                 resource: (texData.sampler === undefined) ? gpu.objectSampler : gpu[texData.sampler],
             }, {
-                binding: 3,
+                binding: 2,
                 resource: (texMode & WebGpu.TextureMode.AMBIENT || this.ambientOverride) ? this.ambientTexture.createView() : gpu.dummy_textureView,
             }, {
-                binding: 4,
+                binding: 3,
                 resource: (texMode & WebGpu.TextureMode.DIFFUSE) ? this.diffuseTexture.createView() : gpu.dummy_textureView,
             }, {
-                binding: 5,
+                binding: 4,
                 resource: (texMode & WebGpu.TextureMode.SPECULAR) ? this.specularTexture.createView() : gpu.dummy_textureView,
             }, {
-                binding: 6,
+                binding: 5,
                 resource: (texMode & WebGpu.TextureMode.NORMAL) ? this.normalTexture.createView() : gpu.dummy_textureView,
-            }],
-        });
-        this.shadowBG0 = gpu.device.createBindGroup({
-            label: "Local DrawableWavefrontObject shadow pipeline object bind group",
-            layout: gpu.shadowPipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.objectUniformBuffer },
-            }, {
-                binding: 1,
-                resource: { buffer: gpu.global_lightBuffer },
             }],
         });
 
@@ -623,12 +582,8 @@ class DrawableWavefrontPlanet extends PlanetBase
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.SHADOW) {
-            commandPass.setBindGroup(0, this.shadowBG0);
-            commandPass.setBindGroup(1, gpu.global_shadowBindGroup1);
-        } else if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
+        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
             commandPass.setBindGroup(0, this.renderBG0);
-            commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
         }
     }
 
