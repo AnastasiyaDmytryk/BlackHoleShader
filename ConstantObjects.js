@@ -13,8 +13,6 @@ class Constants
         DIRECTIONAL: 3,
         POINT: 3,
         SPOT: 3,
-        SHADOWED_POINT: 1,
-        SHADOWED_SPOT: 1,
     });
 
     // Global struct or buffer sizes
