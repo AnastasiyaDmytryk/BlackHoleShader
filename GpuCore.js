@@ -210,7 +210,7 @@ class WebGpu
        
 
         this.sceneColorTexture = this.device.createTexture({
-            size: [600,600],
+            size: [700,700],
             format: this.presentationFormat,
             usage:
                 GPUTextureUsage.RENDER_ATTACHMENT |
