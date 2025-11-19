@@ -32,6 +32,7 @@ class WebGpu
         this.Keys = {};
         this.objectCounter = 0;
         this.isReady = false;
+        this.gui = new GuiController();
         this.setupGpu().then(() => { this.slowStart(); });
     }
 
@@ -209,7 +210,7 @@ class WebGpu
        
 
         this.sceneColorTexture = this.device.createTexture({
-            size: [600,600],
+            size: [700,700],
             format: this.presentationFormat,
             usage:
                 GPUTextureUsage.RENDER_ATTACHMENT |
@@ -372,6 +373,7 @@ class WebGpu
 
     updateAll() {
         // Update objects
+        this.gui.update();
         this.camera.update();
         this.lights.update();
         this.root.update();

@@ -17,7 +17,7 @@ class Constants
 
     // Global struct or buffer sizes
     static SIZE = Object.freeze({
-        CANVAS: 600,
+        CANVAS: 700,
         MATERIAL: 48,
         DIR_LIGHT: 32,
         POINT_LIGHT: 32,

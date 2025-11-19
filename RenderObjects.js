@@ -67,8 +67,8 @@ class MovableCamera extends Camera
             this.velocity[2] = 0;
         }
         // Y axis movement
-        if (gpu.Keys['R'] && !gpu.Keys['F']) this.velocity[1] = vdelta;
-        else if (gpu.Keys['F'] && !gpu.Keys['R']) this.velocity[1] = -vdelta;
+        if (gpu.Keys['Q'] && !gpu.Keys['E']) this.velocity[1] = vdelta;
+        else if (gpu.Keys['E'] && !gpu.Keys['Q']) this.velocity[1] = -vdelta;
         else this.velocity[1] = 0;
         // Y axis rotation
         if (gpu.Keys['D'] && !gpu.Keys['A']) this.angVelocity[1] = rdelta;
