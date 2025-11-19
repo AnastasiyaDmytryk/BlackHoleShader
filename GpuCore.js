@@ -33,6 +33,7 @@ class WebGpu
         this.Keys = {};
         this.objectCounter = 0;
         this.isReady = false;
+        this.gui = new GuiController();
         this.setupGpu().then(() => { this.slowStart(); });
     }
 
@@ -380,6 +381,7 @@ class WebGpu
 
     updateAll() {
         // Update objects
+        this.gui.update();
         this.camera.update();
         this.lights.update();
         this.root.update();

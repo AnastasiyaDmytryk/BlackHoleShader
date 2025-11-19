@@ -10,18 +10,76 @@
         <script src="CoreGameObjects.js"></script>
         <script src="WavefrontObjects.js"></script>
         <script src="RenderObjects.js"></script>
+        <script src="InterfaceObjects.js"></script>
         <script src="GpuCore.js"></script>
     </head>
     <body style="padding: 15px;">
         <header></header>
 
-        <!--h2>Assignment: <s>Bumpy</s> Normy Textures</h2-->
-        <!--h2>Author: Elijah Leucht</h2-->
-
-        <p> Forward/Back: W/S, Up/Down: R/F, Turn: A/D, Speed Up/Down: +/- </p>
-        <canvas id="myCanvas" width="600" height="600" style="border: 1px solid #000000;">
-            Your browser does not support canvas.
-        </canvas>
+        <style>
+            #canvas {
+                float: left;
+                width: 700px;
+                height: 700px;
+            }
+            #sidebar {
+                float: left;
+                width: 500px;
+                height: 700px;
+                padding-left: 15px;
+                padding-right: 15px;
+            }
+            #controls {
+                text-align: center;
+            }
+            #controlbutton {
+                float: left;
+                width: 166px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+            }
+            #controlslider {
+                float: left;
+                width: 250px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+            }
+        </style>
+        <div id="canvas">
+            <canvas id="myCanvas" width="700" height="700" style="border: 1px solid #000000;">
+                Your browser does not support canvas.
+            </canvas>
+        </div>
+        <div id="sidebar">
+            <h2> Final Research Project: Black Hole Shader </h2>
+            <h3> Authors: Anastasiya Dmytryk, Elijah Leucht </h3>
+            <br/>
+            <div id="controls">
+                <h3> Movement Controls: </h3>
+                <p> Forward/Back: W/S, Left/Right: A/D, Up/Down: Q/E, Speed Up/Down: +/- </p>
+                <br/>
+                <h3> Shader Controls: </h3>
+                <div id="controlbutton"> <button id="toggle_1"> Toggle 1 </button> </div>
+                <div id="controlbutton"> <button id="toggle_2"> Toggle 2 </button> </div>
+                <div id="controlbutton"> <button id="toggle_3"> Toggle 3 </button> </div>
+                <div id="controlslider">
+                    <p> Control 1 </p>
+                    <span> 0 <input type="range" id="control_1" min="0" max="100"> 100 </span>
+                </div>
+                <div id="controlslider">
+                    <p> Control 2 </p>
+                    <span> 0 <input type="range" id="control_2" min="0" max="100"> 100 </span>
+                </div>
+                <div id="controlslider">
+                    <p> Control 3 </p>
+                    <span> 0 <input type="range" id="control_3" min="0" max="100"> 100 </span>
+                </div>
+                <div id="controlslider">
+                    <p> Control 4 </p>
+                    <span> 0 <input type="range" id="control_4" min="0" max="100"> 100 </span>
+                </div>
+            </div>
+        </div>
 
         <script>
             var canvas = document.getElementById("myCanvas");
@@ -30,6 +88,8 @@
             window.onkeydown = WebGpu.keyD;
             window.onkeyup = WebGpu.keyU;
             canvas.addEventListener("click", WebGpu.mouseH);
+            gpu.gui.addButtons("toggle_1", "toggle_2", "toggle_3");
+            gpu.gui.addSliders("control_1", "control_2", "control_3", "control_4");
         </script>
         
         <footer></footer>		
