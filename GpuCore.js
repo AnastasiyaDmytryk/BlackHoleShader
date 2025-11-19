@@ -36,8 +36,7 @@ class WebGpu
     }
 
     async slowStart() {
-        // Create boilerplate objects
-        this.camera = new MovableCamera([0,0.5,15], [0,3.14159,0]);
+     this.camera = new MovableCamera([0,0.5,15], [0,3.14159,0]);
         // this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
@@ -210,19 +209,20 @@ class WebGpu
        
 
         this.sceneColorTexture = this.device.createTexture({
-            size: [this.canvas.width, this.canvas.height],
+            size: [600,600],
             format: this.presentationFormat,
             usage:
                 GPUTextureUsage.RENDER_ATTACHMENT |
-                GPUTextureUsage.TEXTURE_BINDING,
+                GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         });
+  
 
-this.sceneColorTextureView = this.sceneColorTexture.createView();
+        this.sceneColorTextureView = this.sceneColorTexture.createView();
 
         console.log("Created a pipeline.");
 
         this.setupGlobals();
- const ppShader = await fetch("PostProcessShader.wgsl").then(r => r.text());
+        const ppShader = await fetch("PostProcessShader.wgsl").then(r => r.text());
         this.postShaderModule = this.device.createShaderModule({ code: ppShader });
 //second pipline
         this.postPipeline = this.device.createRenderPipeline({
@@ -379,10 +379,11 @@ this.sceneColorTextureView = this.sceneColorTexture.createView();
     
     renderAll() {
 
-    // ---- PASS 1: SCENE RENDER ----
+
     const encoder = this.device.createCommandEncoder();
-    
-    const renderPass = encoder.beginRenderPass({
+    this.renderPass = WebGpu.RenderPass.NONE;
+    this.renderPass = WebGpu.RenderPass.RENDER;
+    const renderCommandPass = encoder.beginRenderPass({
         colorAttachments: [{
             view: this.sceneColorTextureView,
             clearValue: Constants.COLOR.CLEAR_COLOR,
@@ -397,26 +398,20 @@ this.sceneColorTextureView = this.sceneColorTexture.createView();
         }
     });
 
-    renderPass.setPipeline(this.pipeline);
-        // bind global groups required by your pipeline (groups 1 and 2 are globals)
-    renderPass.setBindGroup(1, this.global_renderBindGroup1); // lights / global uniforms
-    renderPass.setBindGroup(2, this.global_renderBindGroup2); // camera / scene uniforms
-
-    // bind a default group0 so objects that don't set their own still have something
+    renderCommandPass.setPipeline(this.pipeline);
+        
+    /*renderPass.setBindGroup(1, this.global_renderBindGroup1); 
+    renderPass.setBindGroup(2, this.global_renderBindGroup2); 
     renderPass.setBindGroup(0, this.global_renderBindGroup0);
+*/
 
+    this.lights.render(renderCommandPass);
+    this.camera.render(renderCommandPass);
+    this.root.render(renderCommandPass);
 
-    this.lights.render(renderPass);
-    this.camera.render(renderPass);
-    this.root.render(renderPass);
+    renderCommandPass.end();
 
-    renderPass.end();
-    const sceneCommands = encoder.finish();
-
-
-    // ---- PASS 2: FULLSCREEN QUAD POSTPROCESS ----
     const ppEncoder = this.device.createCommandEncoder();
-
     const pp = ppEncoder.beginRenderPass({
         colorAttachments: [{
             view: this.context.getCurrentTexture().createView(),
@@ -431,10 +426,9 @@ this.sceneColorTextureView = this.sceneColorTexture.createView();
     pp.draw(6);
 
     pp.end();
+    const sceneCommands = encoder.finish();
     const ppCommands = ppEncoder.finish();
 
-
-    // ---- SUBMIT BOTH PASSES ----
     this.device.queue.submit([sceneCommands, ppCommands]);
 }
 

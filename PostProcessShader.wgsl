@@ -20,7 +20,7 @@ fn distort_blackhole(uv: vec2f) -> vec2f {
     let r = length(offset);
 
     let radius = 0.2;
-    let strength = 0.25;
+    let strength = 0.5;
 
     if (r < radius) {
         let distort = 1.0 / (1.0 + r * 6.0 * strength);
