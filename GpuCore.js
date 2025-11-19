@@ -179,7 +179,7 @@ class WebGpu
             }],
         });
 
-        // Create the pipelines
+        // first pipiline
         this.pipeline = this.device.createRenderPipeline({
             label: "Render Pipeline",
             layout: this.device.createPipelineLayout({
@@ -207,11 +207,48 @@ class WebGpu
                 depthCompare: "less",
             },
         });
+       
+
+        this.sceneColorTexture = this.device.createTexture({
+            size: [this.canvas.width, this.canvas.height],
+            format: this.presentationFormat,
+            usage:
+                GPUTextureUsage.RENDER_ATTACHMENT |
+                GPUTextureUsage.TEXTURE_BINDING,
+        });
+
+this.sceneColorTextureView = this.sceneColorTexture.createView();
+
         console.log("Created a pipeline.");
 
         this.setupGlobals();
-
+ const ppShader = await fetch("PostProcessShader.wgsl").then(r => r.text());
+        this.postShaderModule = this.device.createShaderModule({ code: ppShader });
+//second pipline
+        this.postPipeline = this.device.createRenderPipeline({
+            layout: this.device.createPipelineLayout({
+                bindGroupLayouts: [ this.screenBindGroupLayout ]
+            }),
+            vertex: {
+                module: this.postShaderModule,
+                entryPoint: "vs_main",
+                buffers: [{
+                    arrayStride: 4 * 4,
+                    attributes: [{
+                        shaderLocation: 0,
+                        offset: 0,
+                        format: "float32x4",
+                    }],
+                }],
+            },
+            fragment: {
+                module: this.postShaderModule,
+                entryPoint: "fs_main",
+                targets: [{ format: this.presentationFormat }],
+            }
+        });
         this.isReady = true;
+        console.log("PostProcess pipiline created");
     }
 
     setupGlobals() {
@@ -233,6 +270,24 @@ class WebGpu
             size: Constants.SIZE.CAMERA_UNIFORM,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
+        this.screenQuad = this.device.createBuffer({
+            label: "Fullscreen quad",
+            size: 6 * 4 * 4, // 6 vertices × vec4f
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+        this.device.queue.writeBuffer(
+            this.screenQuad,
+            0,
+            new Float32Array([
+                -1, -1, 0, 1,
+                1, -1, 0, 1,
+                -1,  1, 0, 1,
+                -1,  1, 0, 1,
+                1, -1, 0, 1,
+                1,  1, 0, 1,
+            ])
+        );
+
 
         // Define dummy textures for objects to use
         this.dummy_texture = this.device.createTexture({
@@ -289,6 +344,21 @@ class WebGpu
                 resource: { buffer: this.dummy_cameraBuffer },
             }],
         });
+        this.screenBindGroupLayout = this.device.createBindGroupLayout({
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
+                { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} },
+            ]
+        });
+        this.screenBindGroup = this.device.createBindGroup({
+            layout: this.screenBindGroupLayout,
+            entries: [
+                { binding: 0, resource: this.objectSampler },
+                { binding: 1, resource: this.sceneColorTextureView },
+            ],
+        });
+
+
 
         console.log("Set up global buffers.");
     }
@@ -301,43 +371,66 @@ class WebGpu
     }
     
     renderAll() {
-        // TODO: determine if this variable makes sense and remove/update
-        this.renderPass = WebGpu.RenderPass.NONE;
-        var encoder = undefined;
-        var commandBuffer = undefined;
-        var renderCommandPass = undefined;
 
-        // Begin main rendering pass
-        this.renderPass = WebGpu.RenderPass.RENDER;
-        encoder = this.device.createCommandEncoder();
-        renderCommandPass = encoder.beginRenderPass({
-            label: "Rendering command pass",
-            colorAttachments: [{
-                view: this.context.getCurrentTexture().createView(),
-                clearValue: Constants.COLOR.CLEAR_COLOR,
-                loadOp: "clear",
-                storeOp: "store",
-            }],
-            depthStencilAttachment: {
-                view: this.depthTextureView,
-                depthClearValue: 1.0,
-                depthLoadOp: "clear",
-                depthStoreOp: "store",
-            },
-        });
-        renderCommandPass.setPipeline(this.pipeline);
-        // Draw objects
-        this.lights.render(renderCommandPass);
-        this.camera.render(renderCommandPass);
-        this.root.render(renderCommandPass);
-        // End main rendering pass
-        renderCommandPass.end();
-        commandBuffer = encoder.finish();
-        this.device.queue.submit([commandBuffer]);
+    // ---- PASS 1: SCENE RENDER ----
+    const encoder = this.device.createCommandEncoder();
+    
+    const renderPass = encoder.beginRenderPass({
+        colorAttachments: [{
+            view: this.sceneColorTextureView,
+            clearValue: Constants.COLOR.CLEAR_COLOR,
+            loadOp: "clear",
+            storeOp: "store",
+        }],
+        depthStencilAttachment: {
+            view: this.depthTextureView,
+            depthClearValue: 1.0,
+            depthLoadOp: "clear",
+            depthStoreOp: "store",
+        }
+    });
 
-        this.renderPass = WebGpu.RenderPass.NONE;
-        this.renderPassNum = 0;
-    }
+    renderPass.setPipeline(this.pipeline);
+        // bind global groups required by your pipeline (groups 1 and 2 are globals)
+    renderPass.setBindGroup(1, this.global_renderBindGroup1); // lights / global uniforms
+    renderPass.setBindGroup(2, this.global_renderBindGroup2); // camera / scene uniforms
+
+    // bind a default group0 so objects that don't set their own still have something
+    renderPass.setBindGroup(0, this.global_renderBindGroup0);
+
+
+    this.lights.render(renderPass);
+    this.camera.render(renderPass);
+    this.root.render(renderPass);
+
+    renderPass.end();
+    const sceneCommands = encoder.finish();
+
+
+    // ---- PASS 2: FULLSCREEN QUAD POSTPROCESS ----
+    const ppEncoder = this.device.createCommandEncoder();
+
+    const pp = ppEncoder.beginRenderPass({
+        colorAttachments: [{
+            view: this.context.getCurrentTexture().createView(),
+            loadOp: "clear",
+            storeOp: "store",
+        }]
+    });
+
+    pp.setPipeline(this.postPipeline);
+    pp.setBindGroup(0, this.screenBindGroup);
+    pp.setVertexBuffer(0, this.screenQuad);
+    pp.draw(6);
+
+    pp.end();
+    const ppCommands = ppEncoder.finish();
+
+
+    // ---- SUBMIT BOTH PASSES ----
+    this.device.queue.submit([sceneCommands, ppCommands]);
+}
+
 
     checkCollision(loc1, rad1, loc2, rad2) {
         // Return true if they collide, false if they don't.
