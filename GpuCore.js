@@ -350,10 +350,17 @@ this.sceneColorTextureView = this.sceneColorTexture.createView();
                 { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} },
             ]
         });
+        this.postSampler = this.device.createSampler({
+            addressModeU: 'clamp-to-edge',
+            addressModeV: 'clamp-to-edge',
+            magFilter: 'linear',
+            minFilter: 'linear'
+            });
+
         this.screenBindGroup = this.device.createBindGroup({
             layout: this.screenBindGroupLayout,
             entries: [
-                { binding: 0, resource: this.objectSampler },
+                { binding: 0, resource: this.postSampler },
                 { binding: 1, resource: this.sceneColorTextureView },
             ],
         });

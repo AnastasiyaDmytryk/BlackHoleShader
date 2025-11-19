@@ -17,17 +17,34 @@ fn vs_main(@location(0) pos: vec4f) -> VSOut {
 fn distort_blackhole(uv: vec2f) -> vec2f {
     let center = vec2f(0.5, 0.5);
     let offset = uv - center;
-
     let r = length(offset);
 
-    let strength = 0.15;
-    let distort = 1.0 / (1.0 + r * 6.0 * strength);
+    let radius = 0.2;
+    let strength = 0.25;
 
-    return center + offset * distort;
+    if (r < radius) {
+        let distort = 1.0 / (1.0 + r * 6.0 * strength);
+        return center + offset * distort;
+    }
+    return uv;
 }
 
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4f {
-    let uv = distort_blackhole(in.uv);
-    return textureSample(uScreenTex, uSampler, uv);
+    var uv = distort_blackhole(in.uv);
+    var color = textureSample(uScreenTex, uSampler, uv);
+
+    // Add a tint to the black hole
+    let center = vec2f(0.5, 0.5);
+    let distToCenter = length(in.uv - center);
+    let tintRadius = 0.2;
+    if (distToCenter < tintRadius) {
+        let tintStrength = (1.0 - distToCenter / tintRadius);
+        let tintColor = vec3f(0.2, 0.5, 1.0); // blueish tint
+
+        // construct a new vec4f with tinted rgb
+        color = vec4f(mix(color.xyz, tintColor, tintStrength), color.a);
+    }
+
+    return color;
 }
