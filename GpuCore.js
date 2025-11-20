@@ -16,6 +16,7 @@ class WebGpu
     static RenderPass = Object.freeze({
         NONE: 0,
         RENDER: 1,
+        SINGULARITY: 2,
     });
     static TextureMode = Object.freeze({
         NONE: 0,
@@ -37,13 +38,15 @@ class WebGpu
     }
 
     async slowStart() {
-     this.camera = new MovableCamera([0,0.5,15], [0,3.14159,0]);
+        this.camera = new MovableCamera([0,0,20], [0,3.14159,0]);
         // this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
         this.lights.addPointLight([0, 0, 0], [2,2,2]);
         this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.1);
         this.root = new Root();
+        this.quad = new ScreenQuad();
+        this.singularityRoot = new Root();
 
         var objects = [];
         for (const key of Constants.MODELS) {
@@ -69,6 +72,8 @@ class WebGpu
             p, this.getObjectIdByName(p.parentName), WebGpu.ObjectType.VISUAL
         ));
 
+        this.singularityRoot.children.push(new BlackHole([0,0,0], [0,0,0], [5,5,5]));
+
         requestAnimationFrame(WebGpu.mainLoop);
     }
 
@@ -90,13 +95,28 @@ class WebGpu
         console.log("Set up context with device and format.");
 
         // Create textures, depth buffers, and samplers
-        this.depthTexture = this.device.createTexture({
+        this.renderPassDepthTexture = this.device.createTexture({
             label: "Depth texture for rendering",
             size: [this.canvas.width, this.canvas.height],
             format: "depth24plus",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
-        this.depthTextureView = this.depthTexture.createView();
+        this.renderPassDepthTextureView = this.renderPassDepthTexture.createView();
+        this.renderPassTexture = this.device.createTexture({
+            size: [this.canvas.width, this.canvas.height],
+            format: this.presentationFormat,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.renderPassTextureView = this.renderPassTexture.createView();
+        this.comparisonSampler = this.device.createSampler({
+            compare: "less",
+        });
+        this.genericSampler = this.device.createSampler({
+            addressModeU: 'clamp-to-edge',
+            addressModeV: 'clamp-to-edge',
+            magFilter: 'linear',
+            minFilter: 'linear'
+        });
         this.objectSampler = this.device.createSampler({
             addressModeU: 'repeat',
             addressModeV: 'repeat',
@@ -104,13 +124,18 @@ class WebGpu
             minFilter: 'linear',
         });
 
-        // Create a basic shader
+        // Create the rendering shaders
         let renderShaderCode = await fetch('RenderShaderModule.wgsl').then(f=>f.text());
-        this.cellShaderModule = this.device.createShaderModule({
+        this.renderShaderModule = this.device.createShaderModule({
             label: "Render Shader",
             code: renderShaderCode,
         });
-        console.log("Created the rendering shader.");
+        let singularityShaderCode = await fetch("SingularityShaderModule.wgsl").then(f=>f.text());
+        this.singularityShaderModule = this.device.createShaderModule({
+            label: "Singularity Shader",
+            code: singularityShaderCode,
+        });
+        console.log("Created the rendering shaders.");
 
         // Define the vertex buffer layout
         this.vertexBufferLayout = {
@@ -178,20 +203,44 @@ class WebGpu
                 buffer: { type: "uniform" },
             }],
         });
+        this.singularityBindGroupLayout = this.device.createBindGroupLayout({
+            label: "Singularity bind group layout",
+            entries: [{
+                binding: 0,
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                buffer: { type: "uniform" },
+            }, {
+                binding: 1,
+                visibility: GPUShaderStage.FRAGMENT,
+                sampler: {}
+            }, {
+                binding: 2,
+                visibility: GPUShaderStage.FRAGMENT,
+                sampler: { type: "comparison" },
+            }, {
+                binding: 3,
+                visibility: GPUShaderStage.FRAGMENT,
+                texture: {}
+            }, {
+                binding: 4,
+                visibility: GPUShaderStage.FRAGMENT,
+                texture: { sampleType: 'depth' },
+            }],
+        });
 
-        // first pipiline
-        this.pipeline = this.device.createRenderPipeline({
+        // Define pipelines
+        this.renderPipeline = this.device.createRenderPipeline({
             label: "Render Pipeline",
             layout: this.device.createPipelineLayout({
                 bindGroupLayouts: [this.objectBindGroupLayout, this.lightBindGroupLayout, this.sceneBindGroupLayout],
             }),
             vertex: {
-                module: this.cellShaderModule,
+                module: this.renderShaderModule,
                 entryPoint: "vertexMain",
                 buffers: [this.vertexBufferLayout],
             },
             fragment: {
-                module: this.cellShaderModule,
+                module: this.renderShaderModule,
                 entryPoint: "fragmentMain",
                 targets: [{
                     format: this.presentationFormat
@@ -207,49 +256,29 @@ class WebGpu
                 depthCompare: "less",
             },
         });
-       
-
-        this.sceneColorTexture = this.device.createTexture({
-            size: [700,700],
-            format: this.presentationFormat,
-            usage:
-                GPUTextureUsage.RENDER_ATTACHMENT |
-                GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        });
-  
-
-        this.sceneColorTextureView = this.sceneColorTexture.createView();
-
-        console.log("Created a pipeline.");
-
-        this.setupGlobals();
-        const ppShader = await fetch("PostProcessShader.wgsl").then(r => r.text());
-        this.postShaderModule = this.device.createShaderModule({ code: ppShader });
-//second pipline
-        this.postPipeline = this.device.createRenderPipeline({
+        this.singularityPipeline = this.device.createRenderPipeline({
+            label: "Singularity Pipeline",
             layout: this.device.createPipelineLayout({
-                bindGroupLayouts: [ this.screenBindGroupLayout ]
+                bindGroupLayouts: [this.singularityBindGroupLayout, this.sceneBindGroupLayout],
             }),
             vertex: {
-                module: this.postShaderModule,
-                entryPoint: "vs_main",
-                buffers: [{
-                    arrayStride: 4 * 4,
-                    attributes: [{
-                        shaderLocation: 0,
-                        offset: 0,
-                        format: "float32x4",
-                    }],
-                }],
+                module: this.singularityShaderModule,
+                entryPoint: "vertexMain",
+                buffers: [this.vertexBufferLayout],
             },
             fragment: {
-                module: this.postShaderModule,
-                entryPoint: "fs_main",
-                targets: [{ format: this.presentationFormat }],
+                module: this.singularityShaderModule,
+                entryPoint: "fragmentMain",
+                targets: [{
+                    format: this.presentationFormat
+                }],
             }
         });
+        console.log("Created the pipelines.");
+
+        this.setupGlobals();
+
         this.isReady = true;
-        console.log("PostProcess pipiline created");
     }
 
     setupGlobals() {
@@ -271,24 +300,11 @@ class WebGpu
             size: Constants.SIZE.CAMERA_UNIFORM,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-        this.screenQuad = this.device.createBuffer({
-            label: "Fullscreen quad",
-            size: 6 * 4 * 4, // 6 vertices × vec4f
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        this.dummy_singularityBuffer = this.device.createBuffer({
+            label: "Dummy singularity buffer",
+            size: Constants.SIZE.SINGULARITY_UNIFORM,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-        this.device.queue.writeBuffer(
-            this.screenQuad,
-            0,
-            new Float32Array([
-                -1, -1, 0, 1,
-                1, -1, 0, 1,
-                -1,  1, 0, 1,
-                -1,  1, 0, 1,
-                1, -1, 0, 1,
-                1,  1, 0, 1,
-            ])
-        );
-
 
         // Define dummy textures for objects to use
         this.dummy_texture = this.device.createTexture({
@@ -308,7 +324,7 @@ class WebGpu
         // Define global bind group layouts
         this.global_renderBindGroup0 = this.device.createBindGroup({
             label: "Global render pipeline object bind group",
-            layout: this.pipeline.getBindGroupLayout(0),
+            layout: this.renderPipeline.getBindGroupLayout(0),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.dummy_objectBuffer },
@@ -331,7 +347,7 @@ class WebGpu
         });
         this.global_renderBindGroup1 = this.device.createBindGroup({
             label: "Global render pipeline light bind group",
-            layout: this.pipeline.getBindGroupLayout(1),
+            layout: this.renderPipeline.getBindGroupLayout(1),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.global_lightBuffer },
@@ -339,34 +355,40 @@ class WebGpu
         })
         this.global_renderBindGroup2 = this.device.createBindGroup({
             label: "Global render pipeline scene bind group",
-            layout: this.pipeline.getBindGroupLayout(2),
+            layout: this.renderPipeline.getBindGroupLayout(2),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.dummy_cameraBuffer },
             }],
         });
-        this.screenBindGroupLayout = this.device.createBindGroupLayout({
-            entries: [
-                { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
-                { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} },
-            ]
+        this.global_singularityBindGroup0 = this.device.createBindGroup({
+            label: "Global singularity pipeline singularity bind group",
+            layout: this.singularityPipeline.getBindGroupLayout(0),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.dummy_singularityBuffer },
+            }, {
+                binding: 1,
+                resource: this.genericSampler,
+            }, {
+                binding: 2,
+                resource: this.comparisonSampler,
+            }, {
+                binding: 3,
+                resource: this.renderPassTextureView,
+            }, {
+                binding: 4,
+                resource: this.renderPassDepthTextureView,
+            }],
         });
-        this.postSampler = this.device.createSampler({
-            addressModeU: 'clamp-to-edge',
-            addressModeV: 'clamp-to-edge',
-            magFilter: 'linear',
-            minFilter: 'linear'
-            });
-
-        this.screenBindGroup = this.device.createBindGroup({
-            layout: this.screenBindGroupLayout,
-            entries: [
-                { binding: 0, resource: this.postSampler },
-                { binding: 1, resource: this.sceneColorTextureView },
-            ],
+        this.global_singularityBindGroup1 = this.device.createBindGroup({
+            label: "Global singularity pipeline scene bind group",
+            layout: this.singularityPipeline.getBindGroupLayout(1),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.dummy_cameraBuffer },
+            }],
         });
-
-
 
         console.log("Set up global buffers.");
     }
@@ -377,62 +399,64 @@ class WebGpu
         this.camera.update();
         this.lights.update();
         this.root.update();
+        this.quad.update();
+        this.singularityRoot.update();
     }
     
     renderAll() {
+        this.renderPass = WebGpu.RenderPass.NONE;
 
+        // Begin main rendering pass
+        this.renderPass = WebGpu.RenderPass.RENDER;
+        const renderEncoder = this.device.createCommandEncoder();
+        const renderCommandPass = renderEncoder.beginRenderPass({
+            label: "Rendering command pass",
+            colorAttachments: [{
+                view: this.renderPassTextureView,
+                clearValue: Constants.COLOR.CLEAR_COLOR,
+                loadOp: "clear",
+                storeOp: "store",
+            }],
+            depthStencilAttachment: {
+                view: this.renderPassDepthTextureView,
+                depthClearValue: 1.0,
+                depthLoadOp: "clear",
+                depthStoreOp: "store",
+            }
+        });
+        renderCommandPass.setPipeline(this.renderPipeline);
+        // Draw objects
+        this.lights.render(renderCommandPass);
+        this.camera.render(renderCommandPass);
+        this.root.render(renderCommandPass);
+        // End main rendering pass
+        renderCommandPass.end();
+        const renderCommands = renderEncoder.finish();
 
-    const encoder = this.device.createCommandEncoder();
-    this.renderPass = WebGpu.RenderPass.NONE;
-    this.renderPass = WebGpu.RenderPass.RENDER;
-    const renderCommandPass = encoder.beginRenderPass({
-        colorAttachments: [{
-            view: this.sceneColorTextureView,
-            clearValue: Constants.COLOR.CLEAR_COLOR,
-            loadOp: "clear",
-            storeOp: "store",
-        }],
-        depthStencilAttachment: {
-            view: this.depthTextureView,
-            depthClearValue: 1.0,
-            depthLoadOp: "clear",
-            depthStoreOp: "store",
-        }
-    });
+        // Begin singularity rendering pass
+        this.renderPass = WebGpu.RenderPass.SINGULARITY;
+        const singularityEncoder = this.device.createCommandEncoder();
+        const singularityCommandPass = singularityEncoder.beginRenderPass({
+            label: "Singularity command pass",
+            colorAttachments: [{
+                view: this.context.getCurrentTexture().createView(),
+                loadOp: "clear",
+                storeOp: "store",
+            }]
+        });
+        singularityCommandPass.setPipeline(this.singularityPipeline);
+        // TODO
+        this.camera.render(singularityCommandPass);
+        this.singularityRoot.render(singularityCommandPass);
+        this.quad.render(singularityCommandPass);
+        // End singularity rendering pass
+        singularityCommandPass.end();
+        const singularityCommands = singularityEncoder.finish();
 
-    renderCommandPass.setPipeline(this.pipeline);
-        
-    /*renderPass.setBindGroup(1, this.global_renderBindGroup1); 
-    renderPass.setBindGroup(2, this.global_renderBindGroup2); 
-    renderPass.setBindGroup(0, this.global_renderBindGroup0);
-*/
-
-    this.lights.render(renderCommandPass);
-    this.camera.render(renderCommandPass);
-    this.root.render(renderCommandPass);
-
-    renderCommandPass.end();
-
-    const ppEncoder = this.device.createCommandEncoder();
-    const pp = ppEncoder.beginRenderPass({
-        colorAttachments: [{
-            view: this.context.getCurrentTexture().createView(),
-            loadOp: "clear",
-            storeOp: "store",
-        }]
-    });
-
-    pp.setPipeline(this.postPipeline);
-    pp.setBindGroup(0, this.screenBindGroup);
-    pp.setVertexBuffer(0, this.screenQuad);
-    pp.draw(6);
-
-    pp.end();
-    const sceneCommands = encoder.finish();
-    const ppCommands = ppEncoder.finish();
-
-    this.device.queue.submit([sceneCommands, ppCommands]);
-}
+        // Submit commands
+        this.renderPass = WebGpu.RenderPass.NONE;
+        this.device.queue.submit([renderCommands, singularityCommands]);
+    }
 
 
     checkCollision(loc1, rad1, loc2, rad2) {

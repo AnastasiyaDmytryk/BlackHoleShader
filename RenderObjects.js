@@ -20,8 +20,16 @@ class Camera extends CameraBase
         });
 
         this.renderBG2 = gpu.device.createBindGroup({
-            label: "Local Camera bind group",
-            layout: gpu.pipeline.getBindGroupLayout(2),
+            label: "Local Camera render bind group 2",
+            layout: gpu.renderPipeline.getBindGroupLayout(2),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.cameraUniformBuffer },
+            }],
+        });
+        this.singularityBG1 = gpu.device.createBindGroup({
+            label: "Local Camera singularity bind group 1",
+            layout: gpu.singularityPipeline.getBindGroupLayout(1),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.cameraUniformBuffer },
@@ -33,9 +41,10 @@ class Camera extends CameraBase
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
+        if (gpu.renderPass === WebGpu.RenderPass.RENDER)
             commandPass.setBindGroup(2, this.renderBG2);
-        }
+        else if (gpu.renderPass === WebGpu.RenderPass.SINGULARITY)
+            commandPass.setBindGroup(1, this.singularityBG1);
     }
 
     update() {}
@@ -225,11 +234,9 @@ class LightSystem
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(0, gpu.global_renderBindGroup0);
-            commandPass.setBindGroup(1, gpu.global_renderBindGroup1);
-            commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
-        }
+        commandPass.setBindGroup(0, gpu.global_renderBindGroup0);
+        commandPass.setBindGroup(1, gpu.global_renderBindGroup1);
+        commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
     }
 
     update() {
@@ -260,11 +267,11 @@ class Orrery
     static addPlanet(objects, parentId, type) {
         let pnum = ++Orrery.numPlanets;
         if (parentId === undefined) {
-            let pol = [pnum * 10, 2*Math.PI * Orrery.rng.next(), 0];
+            let pol = [5 + pnum * 10, 2*Math.PI * Orrery.rng.next(), 0];
             let rot = objects[0].offset.rot;
             let scl = objects[0].offset.scl;
-            let rotSpeed = [0, -0.005 / pnum, 0];
-            let polSpeed = 0.0005 + 0.003 / pnum;
+            let rotSpeed = [0, -0.0075 / pnum, 0];
+            let polSpeed = 0.0005 + 0.004 / pnum;
             let incline = (pnum % 6 === 0) ? Math.PI/8 : Math.PI/24 * Orrery.rng.next();
             let offset = 2*Math.PI * Orrery.rng.next();
             let axisMode = undefined;
@@ -366,7 +373,7 @@ class DrawableWavefrontObject extends GameObject
 
         this.renderBG0 = gpu.device.createBindGroup({
             label: "Local DrawableWavefrontObject render pipeline object bind group",
-            layout: gpu.pipeline.getBindGroupLayout(0),
+            layout: gpu.renderPipeline.getBindGroupLayout(0),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.objectUniformBuffer },
@@ -419,9 +426,7 @@ class DrawableWavefrontObject extends GameObject
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(0, this.renderBG0);
-        }
+        commandPass.setBindGroup(0, this.renderBG0);
     }
 
     update() {}
@@ -529,7 +534,7 @@ class DrawableWavefrontPlanet extends PlanetBase
 
         this.renderBG0 = gpu.device.createBindGroup({
             label: "Local DrawableWavefrontObject render pipeline object bind group",
-            layout: gpu.pipeline.getBindGroupLayout(0),
+            layout: gpu.renderPipeline.getBindGroupLayout(0),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.objectUniformBuffer },
@@ -582,9 +587,7 @@ class DrawableWavefrontPlanet extends PlanetBase
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(0, this.renderBG0);
-        }
+        commandPass.setBindGroup(0, this.renderBG0);
     }
 
     render(commandPass, offset) {
@@ -604,4 +607,89 @@ class DrawableWavefrontPlanet extends PlanetBase
         commandPass.setVertexBuffer(0, this.vertexBuffer);
         commandPass.draw(this.vertices.length/(3+3+2)); /* vertexnum/sizeof(params) */
     }
+}
+
+
+class ScreenQuad extends GameObject
+{
+    constructor() {
+        super([0,0,0], [0,0,0], [1,1,1]);
+
+        this.vertices = new Float32Array([
+        //   X  Y  Z  nX nY nZ   U V
+            -1,-1, 0,  0, 0, 1,  0,0,
+             1,-1, 0,  0, 0, 1,  0,0,
+            -1, 1, 0,  0, 0, 1,  0,0,
+            -1, 1, 0,  0, 0, 1,  0,0,
+             1,-1, 0,  0, 0, 1,  0,0,
+             1, 1, 0,  0, 0, 1,  0,0,
+        ]);
+        this.vertexBuffer = gpu.device.createBuffer({
+            label: "Fullscreen quad",
+            size: this.vertices.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+        gpu.device.queue.writeBuffer(this.vertexBuffer, /*bufferOffset=*/0, this.vertices);
+    }
+
+    update() {}
+
+    render(commandPass, offset) {
+        // Render self
+        commandPass.setVertexBuffer(0, this.vertexBuffer);
+        commandPass.draw(this.vertices.length/(3+3+2)); /* vertexnum/sizeof(params) */
+    }
+}
+
+
+class BlackHole extends GameObject
+{
+    constructor(loc, rot, scl) {
+        // Spread operator ensures arrays are copied
+        super([...loc], [...rot], [...scl]);
+
+        this.singularityUniformBufferSize = Constants.SIZE.SINGULARITY_UNIFORM;
+        this.singularityUniformBuffer = gpu.device.createBuffer({
+            label: "Local BlackHole singularity buffer for " + this.id,
+            size: this.singularityUniformBufferSize,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+        this.singularityBG0 = gpu.device.createBindGroup({
+            label: "Local BlackHole singularity pipeline singularity bind group",
+            layout: gpu.singularityPipeline.getBindGroupLayout(0),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.singularityUniformBuffer },
+            }, {
+                binding: 1,
+                resource: gpu.genericSampler,
+            }, {
+                binding: 2,
+                resource: gpu.comparisonSampler,
+            }, {
+                binding: 3,
+                resource: gpu.renderPassTextureView,
+            }, {
+                binding: 4,
+                resource: gpu.renderPassDepthTextureView,
+            }],
+        });
+    }
+
+    setBindGroups(commandPass) {
+        commandPass.setBindGroup(0, this.singularityBG0);
+    }
+
+    update() {}
+
+    render(commandPass, offset) {
+        // Render self
+        this.setBindGroups(commandPass);
+
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 0, new Float32Array([0,0,0]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 12, new Float32Array([5]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 16, new Float32Array([2.5]));
+    }
+    
 }
