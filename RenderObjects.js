@@ -21,7 +21,7 @@ class Camera extends CameraBase
 
         this.renderBG2 = gpu.device.createBindGroup({
             label: "Local Camera bind group",
-            layout: gpu.pipeline.getBindGroupLayout(2),
+            layout: gpu.renderPipeline.getBindGroupLayout(2),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.cameraUniformBuffer },
@@ -33,9 +33,7 @@ class Camera extends CameraBase
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(2, this.renderBG2);
-        }
+        commandPass.setBindGroup(2, this.renderBG2);
     }
 
     update() {}
@@ -225,11 +223,9 @@ class LightSystem
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(0, gpu.global_renderBindGroup0);
-            commandPass.setBindGroup(1, gpu.global_renderBindGroup1);
-            commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
-        }
+        commandPass.setBindGroup(0, gpu.global_renderBindGroup0);
+        commandPass.setBindGroup(1, gpu.global_renderBindGroup1);
+        commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
     }
 
     update() {
@@ -366,7 +362,7 @@ class DrawableWavefrontObject extends GameObject
 
         this.renderBG0 = gpu.device.createBindGroup({
             label: "Local DrawableWavefrontObject render pipeline object bind group",
-            layout: gpu.pipeline.getBindGroupLayout(0),
+            layout: gpu.renderPipeline.getBindGroupLayout(0),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.objectUniformBuffer },
@@ -419,9 +415,7 @@ class DrawableWavefrontObject extends GameObject
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(0, this.renderBG0);
-        }
+        commandPass.setBindGroup(0, this.renderBG0);
     }
 
     update() {}
@@ -529,7 +523,7 @@ class DrawableWavefrontPlanet extends PlanetBase
 
         this.renderBG0 = gpu.device.createBindGroup({
             label: "Local DrawableWavefrontObject render pipeline object bind group",
-            layout: gpu.pipeline.getBindGroupLayout(0),
+            layout: gpu.renderPipeline.getBindGroupLayout(0),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.objectUniformBuffer },
@@ -582,9 +576,7 @@ class DrawableWavefrontPlanet extends PlanetBase
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(0, this.renderBG0);
-        }
+        commandPass.setBindGroup(0, this.renderBG0);
     }
 
     render(commandPass, offset) {
