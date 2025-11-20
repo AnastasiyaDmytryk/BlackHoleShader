@@ -59,24 +59,44 @@
                 <p> Forward/Back: W/S, Left/Right: A/D, Up/Down: Q/E, Speed Up/Down: +/- </p>
                 <br/>
                 <h3> Shader Controls: </h3>
-                <div id="controlbutton"> <button id="toggle_1"> Toggle 1 </button> </div>
-                <div id="controlbutton"> <button id="toggle_2"> Toggle 2 </button> </div>
-                <div id="controlbutton"> <button id="toggle_3"> Toggle 3 </button> </div>
-                <div id="controlslider">
-                    <p> Control 1 </p>
-                    <span> 0 <input type="range" id="control_1" min="0" max="100"> 100 </span>
+                <div id="controlbutton"> <button id="swap_1"> Swap 1 </button> </div>
+                <div id="controlbutton"> <button id="swap_2"> Swap 2 </button> </div>
+                <div id="controlbutton"> <button id="swap_3"> Swap 3 </button> </div>
+                <div id="controlbutton">
+                    <p> Toggle 1 </p>
+                    <input type="checkbox" id="toggle_1">
+                </div>
+                <div id="controlbutton">
+                    <p> Toggle 2 </p>
+                    <input type="checkbox" id="toggle_2">
+                </div>
+                <div id="controlbutton">
+                    <p> Toggle 3 </p>
+                    <input type="checkbox" id="toggle_3">
                 </div>
                 <div id="controlslider">
-                    <p> Control 2 </p>
-                    <span> 0 <input type="range" id="control_2" min="0" max="100"> 100 </span>
+                    <p> Lensing Radius </p>
+                    <span> 0 <input type="range" id="control_effectRadius" min="0" max="20" step="0.1" value="6"> 20 </span>
                 </div>
                 <div id="controlslider">
-                    <p> Control 3 </p>
-                    <span> 0 <input type="range" id="control_3" min="0" max="100"> 100 </span>
+                    <p> Black Hole Radius </p>
+                    <span> 0 <input type="range" id="control_horizonRadius" min="0" max="20" step="0.1" value="2"> 20 </span>
                 </div>
                 <div id="controlslider">
-                    <p> Control 4 </p>
-                    <span> 0 <input type="range" id="control_4" min="0" max="100"> 100 </span>
+                    <p> Halo Strength </p>
+                    <span> 0 <input type="range" id="control_haloFalloff" min="0" max="200" step="1" value="100"> 200 </span>
+                </div>
+                <div id="controlslider">
+                    <p> Distortion Distance </p>
+                    <span> 0 <input type="range" id="control_pushStrength" min="0" max="10" step="0.1" value="1"> 10 </span>
+                </div>
+                <div id="controlslider">
+                    <p> Distortion Offset </p>
+                    <span> 0 <input type="range" id="control_warpStrength" min="0" max="10" step="0.1" value="1"> 10 </span>
+                </div>
+                <div id="controlslider">
+                    <p> Distortion Power </p>
+                    <span> 0 <input type="range" id="control_bendStrength" min="0" max="10" step="0.1" value="2"> 10 </span>
                 </div>
             </div>
         </div>
@@ -88,8 +108,12 @@
             window.onkeydown = WebGpu.keyD;
             window.onkeyup = WebGpu.keyU;
             canvas.addEventListener("click", WebGpu.mouseH);
-            gpu.gui.addButtons("toggle_1", "toggle_2", "toggle_3");
-            gpu.gui.addSliders("control_1", "control_2", "control_3", "control_4");
+            gpu.gui.addButtons("swap_1", "swap_2", "swap_3");
+            gpu.gui.addToggles("toggle_1", "toggle_2", "toggle_3");
+            gpu.gui.addSliders(
+                "control_effectRadius", "control_horizonRadius", "control_haloFalloff",
+                "control_pushStrength", "control_warpStrength", "control_bendStrength"
+            );
         </script>
         
         <footer></footer>		

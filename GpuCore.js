@@ -33,7 +33,7 @@ class WebGpu
         this.Keys = {};
         this.objectCounter = 0;
         this.isReady = false;
-        this.gui = new GuiController();
+        this.gui = new SingularityGuiController();
         this.setupGpu().then(() => { this.slowStart(); });
     }
 
@@ -45,8 +45,7 @@ class WebGpu
         this.lights.addPointLight([0, 0, 0], [2,2,2]);
         this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.1);
         this.root = new Root();
-        this.quad = new ScreenQuad();
-        this.singularityRoot = new Root();
+        this.singularity = new BlackHole([0,0,0], 6, 2, 100, 1, 1, 2);
 
         var objects = [];
         for (const key of Constants.MODELS) {
@@ -71,8 +70,6 @@ class WebGpu
         planets.forEach(p => Orrery.addPlanet(
             p, this.getObjectIdByName(p.parentName), WebGpu.ObjectType.VISUAL
         ));
-
-        this.singularityRoot.children.push(new BlackHole([0,0,0], [0,0,0], [5,5,5]));
 
         requestAnimationFrame(WebGpu.mainLoop);
     }
@@ -399,8 +396,7 @@ class WebGpu
         this.camera.update();
         this.lights.update();
         this.root.update();
-        this.quad.update();
-        this.singularityRoot.update();
+        this.singularity.update();
     }
     
     renderAll() {
@@ -447,8 +443,7 @@ class WebGpu
         singularityCommandPass.setPipeline(this.singularityPipeline);
         // TODO
         this.camera.render(singularityCommandPass);
-        this.singularityRoot.render(singularityCommandPass);
-        this.quad.render(singularityCommandPass);
+        this.singularity.render(singularityCommandPass);
         // End singularity rendering pass
         singularityCommandPass.end();
         const singularityCommands = singularityEncoder.finish();

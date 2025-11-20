@@ -152,13 +152,11 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
     return color;
 
     // Add a tint to the black hole
-    let tintRadius = outerRadius;
+    /*let tintRadius = outerRadius;
     if (distToCenter < tintRadius) {
         let tintStrength = (1.0 - distToCenter / tintRadius);
         let tintColor = vec3f(0.5, 0.1, 0.1); // red tint
         // construct a new vec4f with tinted rgb
         color = vec4f(mix(color.xyz, tintColor, tintStrength), color.a);
-    }
-
-    return color;
+    }*/
 }
