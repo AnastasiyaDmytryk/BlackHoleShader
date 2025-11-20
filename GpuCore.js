@@ -38,7 +38,7 @@ class WebGpu
     }
 
     async slowStart() {
-        this.camera = new MovableCamera([0,0.5,15], [0,3.14159,0]);
+        this.camera = new MovableCamera([0,0,20], [0,3.14159,0]);
         // this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);

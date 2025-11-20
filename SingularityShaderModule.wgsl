@@ -2,7 +2,8 @@
 // Uniform definitions
 struct SingularityUniform {
     center: vec3f,
-    radius: f32,
+    effectRadius: f32,
+    horizonRadius: f32,
 }
 @group(0) @binding(0) var<uniform> u_singularity: SingularityUniform;
 
@@ -113,22 +114,26 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
     var truepos = perspectiveProjectCamera(transformCamera(vec4(u_singularity.center.xyz, 1)));
     let perspective = truepos.w;
     truepos = truepos / truepos.w;
-    let radius = u_singularity.radius / perspective;
+    let outerRadius = u_singularity.effectRadius / perspective;
+    let innerRadius = u_singularity.horizonRadius / perspective;
     let center = vec2f(truepos.x * 0.5 + 0.5, 1 - (truepos.y * 0.5 + 0.5));
 
     // Fragments in front of the singularity do not get distorted
-    let depth = textureSampleCompare(g_screenDepthTexture, g_depthSampler, params.screen, truepos.z);
-    let distorted = distort_blackhole(params.screen, center, radius);
-    let uv = select(params.screen, distorted, depth == 1.0);
+    let isFront = textureSampleCompare(g_screenDepthTexture, g_depthSampler, params.screen, truepos.z);
+    let distortuv = distort_blackhole(params.screen, center, outerRadius);
+    let trueuv = params.screen;
+    let uv = select(trueuv, distortuv, isFront == 1.0);
 
-    var color = textureSample(g_screenTexture, g_textureSampler, uv);
+    let distToCenter = length(params.screen - center);
+    let distortColor = textureSample(g_screenTexture, g_textureSampler, uv);
+    var color = select(distortColor, vec4(0.0), distToCenter < innerRadius && isFront == 1.0);
+    return color;
 
     // Add a tint to the black hole
-    let distToCenter = length(params.screen - center);
-    let tintRadius = radius;
+    let tintRadius = outerRadius;
     if (distToCenter < tintRadius) {
         let tintStrength = (1.0 - distToCenter / tintRadius);
-        let tintColor = vec3f(0.2, 0.5, 1.0); // blueish tint
+        let tintColor = vec3f(0.5, 0.1, 0.1); // red tint
         // construct a new vec4f with tinted rgb
         color = vec4f(mix(color.xyz, tintColor, tintStrength), color.a);
     }

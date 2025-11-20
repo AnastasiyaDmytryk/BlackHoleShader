@@ -689,6 +689,7 @@ class BlackHole extends GameObject
 
         gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 0, new Float32Array([0,0,0]));
         gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 12, new Float32Array([5]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 16, new Float32Array([2.5]));
     }
     
 }

@@ -26,7 +26,7 @@ class Constants
         LIGHT_UNIFORM: 32 + Constants.MAX_LIGHT_NUM.DIRECTIONAL*32 + Constants.MAX_LIGHT_NUM.POINT*32 + Constants.MAX_LIGHT_NUM.SPOT*48,
         CAMERA_UNIFORM: 32,
         TRANSFORM_UNIFORM: 64,
-        SINGULARITY_UNIFORM: 16,
+        SINGULARITY_UNIFORM: 32,
     });
 
     // Global buffer offset calculations
