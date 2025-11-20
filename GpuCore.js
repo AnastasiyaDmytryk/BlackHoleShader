@@ -40,6 +40,8 @@ class WebGpu
         this.lights.addPointLight([0, 0, 0], [2,2,2]);
         this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.1);
         this.root = new Root();
+        this.quad = new ScreenQuad();
+        this.singularityRoot = new Root();
 
         var objects = [];
         for (const key of Constants.MODELS) {
@@ -64,6 +66,8 @@ class WebGpu
         planets.forEach(p => Orrery.addPlanet(
             p, this.getObjectIdByName(p.parentName), WebGpu.ObjectType.VISUAL
         ));
+
+        this.singularityRoot.children.push(new BlackHole([0,0,0], [0,0,0], [5,5,5]));
 
         requestAnimationFrame(WebGpu.mainLoop);
     }
@@ -203,10 +207,14 @@ class WebGpu
             label: "Singularity bind group layout",
             entries: [{
                 binding: 0,
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                buffer: { type: "uniform" },
+            }, {
+                binding: 1,
                 visibility: GPUShaderStage.FRAGMENT,
                 sampler: {}
             }, {
-                binding: 1,
+                binding: 2,
                 visibility: GPUShaderStage.FRAGMENT,
                 texture: {}
             }],
@@ -242,7 +250,7 @@ class WebGpu
         });
         this.singularityPipeline = this.device.createRenderPipeline({
             layout: this.device.createPipelineLayout({
-                bindGroupLayouts: [this.transformBindGroupLayout, this.singularityBindGroupLayout],
+                bindGroupLayouts: [this.transformBindGroupLayout, this.singularityBindGroupLayout, this.sceneBindGroupLayout],
             }),
             vertex: {
                 module: this.singularityShaderModule,
@@ -283,24 +291,11 @@ class WebGpu
             size: Constants.SIZE.CAMERA_UNIFORM,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-
-        // TODO
-        this.screenQuad = this.device.createBuffer({
-            label: "Fullscreen quad",
-            size: 6 * (4*3 + 4*3 + 4*2),
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        this.dummy_singularityBuffer = this.device.createBuffer({
+            label: "Dummy singularity buffer",
+            size: Constants.SIZE.SINGULARITY_UNIFORM,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-        this.device.queue.writeBuffer(
-            this.screenQuad, 0,
-            new Float32Array([
-                -1, -1, 0,  0, 0, 1,  0, 0,
-                 1, -1, 0,  0, 0, 1,  0, 0,
-                -1,  1, 0,  0, 0, 1,  0, 0,
-                -1,  1, 0,  0, 0, 1,  0, 0,
-                 1, -1, 0,  0, 0, 1,  0, 0,
-                 1,  1, 0,  0, 0, 1,  0, 0,
-            ])
-        );
 
         // Define dummy textures for objects to use
         this.dummy_texture = this.device.createTexture({
@@ -361,7 +356,7 @@ class WebGpu
             label: "Global singularity pipeline transform bind group",
             layout: this.singularityPipeline.getBindGroupLayout(0),
             entries: [{
-                binding: 0, // TODO
+                binding: 0,
                 resource: { buffer: this.dummy_objectBuffer },
             }],
         });
@@ -370,10 +365,21 @@ class WebGpu
             layout: this.singularityPipeline.getBindGroupLayout(1),
             entries: [{
                 binding: 0,
-                resource: this.genericSampler
+                resource: { buffer: this.dummy_singularityBuffer },
             }, {
                 binding: 1,
+                resource: this.genericSampler
+            }, {
+                binding: 2,
                 resource: this.renderPassTextureView
+            }],
+        });
+        this.global_singularityBindGroup2 = this.device.createBindGroup({
+            label: "Global singularity pipeline scene bind group",
+            layout: this.singularityPipeline.getBindGroupLayout(2),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.dummy_cameraBuffer },
             }],
         });
 
@@ -386,6 +392,8 @@ class WebGpu
         this.camera.update();
         this.lights.update();
         this.root.update();
+        this.quad.update();
+        this.singularityRoot.update();
     }
     
     renderAll() {
@@ -417,7 +425,7 @@ class WebGpu
 
         // Begin singularity rendering pass
         const singularityEncoder = this.device.createCommandEncoder();
-        const singularityRenderPass = singularityEncoder.beginRenderPass({
+        const singularityCommandPass = singularityEncoder.beginRenderPass({
             label: "Singularity command pass",
             colorAttachments: [{
                 view: this.context.getCurrentTexture().createView(),
@@ -425,15 +433,13 @@ class WebGpu
                 storeOp: "store",
             }]
         });
-        singularityRenderPass.setPipeline(this.singularityPipeline);
+        singularityCommandPass.setPipeline(this.singularityPipeline);
         // TODO
-        singularityRenderPass.setBindGroup(0, this.global_singularityBindGroup0);
-        singularityRenderPass.setBindGroup(1, this.global_singularityBindGroup1);
-        singularityRenderPass.setVertexBuffer(0, this.screenQuad);
-        // Draw objects
-        singularityRenderPass.draw(6);
+        this.camera.render(singularityCommandPass);
+        this.singularityRoot.render(singularityCommandPass);
+        this.quad.render(singularityCommandPass);
         // End singularity rendering pass
-        singularityRenderPass.end();
+        singularityCommandPass.end();
         const singularityCommands = singularityEncoder.finish();
 
         // Submit commands
