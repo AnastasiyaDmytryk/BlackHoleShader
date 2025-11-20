@@ -33,7 +33,7 @@ class WebGpu
     }
 
     async slowStart() {
-     this.camera = new MovableCamera([0,0.5,15], [0,3.14159,0]);
+        this.camera = new MovableCamera([0,0.5,15], [0,3.14159,0]);
         // this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
@@ -118,7 +118,7 @@ class WebGpu
             label: "Render Shader",
             code: renderShaderCode,
         });
-        let singularityShaderCode = await fetch("PostProcessShader.wgsl").then(f=>f.text());
+        let singularityShaderCode = await fetch("SingularityShaderModule.wgsl").then(f=>f.text());
         this.singularityShaderModule = this.device.createShaderModule({
             label: "Singularity Shader",
             code: singularityShaderCode,
@@ -191,6 +191,14 @@ class WebGpu
                 buffer: { type: "uniform" },
             }],
         });
+        this.transformBindGroupLayout = this.device.createBindGroupLayout({
+            label: "Transform bind group layout",
+            entries: [{
+                binding: 0,
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                buffer: { type: "uniform" },
+            }],
+        });
         this.singularityBindGroupLayout = this.device.createBindGroupLayout({
             label: "Singularity bind group layout",
             entries: [{
@@ -234,20 +242,12 @@ class WebGpu
         });
         this.singularityPipeline = this.device.createRenderPipeline({
             layout: this.device.createPipelineLayout({
-                bindGroupLayouts: [this.singularityBindGroupLayout],
+                bindGroupLayouts: [this.transformBindGroupLayout, this.singularityBindGroupLayout],
             }),
             vertex: {
                 module: this.singularityShaderModule,
                 entryPoint: "vertexMain",
-                buffers: [{
-                    // TODO
-                    arrayStride: 4 * 4,
-                    attributes: [{
-                        shaderLocation: 0,
-                        offset: 0,
-                        format: "float32x4",
-                    }],
-                }],
+                buffers: [this.vertexBufferLayout],
             },
             fragment: {
                 module: this.singularityShaderModule,
@@ -287,18 +287,18 @@ class WebGpu
         // TODO
         this.screenQuad = this.device.createBuffer({
             label: "Fullscreen quad",
-            size: 6 * 4 * 4, // 6 vertices × vec4f
+            size: 6 * (4*3 + 4*3 + 4*2),
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
         this.device.queue.writeBuffer(
             this.screenQuad, 0,
             new Float32Array([
-                -1, -1, 0, 1,
-                1, -1, 0, 1,
-                -1,  1, 0, 1,
-                -1,  1, 0, 1,
-                1, -1, 0, 1,
-                1,  1, 0, 1,
+                -1, -1, 0,  0, 0, 1,  0, 0,
+                 1, -1, 0,  0, 0, 1,  0, 0,
+                -1,  1, 0,  0, 0, 1,  0, 0,
+                -1,  1, 0,  0, 0, 1,  0, 0,
+                 1, -1, 0,  0, 0, 1,  0, 0,
+                 1,  1, 0,  0, 0, 1,  0, 0,
             ])
         );
 
@@ -358,8 +358,16 @@ class WebGpu
             }],
         });
         this.global_singularityBindGroup0 = this.device.createBindGroup({
+            label: "Global singularity pipeline transform bind group",
+            layout: this.singularityPipeline.getBindGroupLayout(0),
+            entries: [{
+                binding: 0, // TODO
+                resource: { buffer: this.dummy_objectBuffer },
+            }],
+        });
+        this.global_singularityBindGroup1 = this.device.createBindGroup({
             label: "Global singularity pipeline singularity bind group",
-            layout: this.singularityBindGroupLayout,
+            layout: this.singularityPipeline.getBindGroupLayout(1),
             entries: [{
                 binding: 0,
                 resource: this.genericSampler
@@ -420,6 +428,7 @@ class WebGpu
         singularityRenderPass.setPipeline(this.singularityPipeline);
         // TODO
         singularityRenderPass.setBindGroup(0, this.global_singularityBindGroup0);
+        singularityRenderPass.setBindGroup(1, this.global_singularityBindGroup1);
         singularityRenderPass.setVertexBuffer(0, this.screenQuad);
         // Draw objects
         singularityRenderPass.draw(6);

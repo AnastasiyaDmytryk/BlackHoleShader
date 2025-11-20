@@ -1,7 +1,20 @@
 
-// Binding definitions
-@group(0) @binding(0) var g_textureSampler: sampler;
-@group(0) @binding(1) var g_screenTexture: texture_2d<f32>;
+// Uniform definitions
+struct ObjectUniform {      // size 64
+    transform: mat4x4<f32>, // byte 0
+};
+@group(0) @binding(0) var<uniform> u_object: ObjectUniform;
+
+struct CameraUniform {
+    translation: vec4f,
+    rotation: vec4f,
+};
+@group(2) @binding(0) var<uniform> u_camera: CameraUniform;
+
+
+// Non-uniform binding definitions
+@group(1) @binding(0) var g_textureSampler: sampler;
+@group(1) @binding(1) var g_screenTexture: texture_2d<f32>;
 
 
 // Struct definitions
@@ -31,9 +44,9 @@ fn distort_blackhole(uv: vec2f) -> vec2f {
 
 // Vertex shader entry point
 @vertex
-fn vertexMain(@location(0) pos: vec4f) -> FragmentParams {
+fn vertexMain(@location(0) pos: vec3f, @location(1) nml: vec3f, @location(2) uvs: vec2f) -> FragmentParams {
     var ret: FragmentParams;
-    ret.pos = pos;
+    ret.pos = vec4f(pos,1);
     ret.uv = pos.xy * 0.5 + 0.5;
     ret.uv.y = 1 - ret.uv.y;
     return ret;
