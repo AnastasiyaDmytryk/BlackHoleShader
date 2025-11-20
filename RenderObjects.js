@@ -688,8 +688,12 @@ class BlackHole extends GameObject
         this.setBindGroups(commandPass);
 
         gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 0, new Float32Array([0,0,0]));
-        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 12, new Float32Array([5]));
-        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 16, new Float32Array([2.5]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 12, new Float32Array([6.0]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 16, new Float32Array([2.0]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 20, new Float32Array([100.0]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 24, new Float32Array([1.0]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 28, new Float32Array([1.0]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 32, new Float32Array([2.0]));
     }
     
 }
