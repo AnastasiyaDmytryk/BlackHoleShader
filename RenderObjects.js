@@ -263,8 +263,8 @@ class Orrery
             let pol = [pnum * 10, 2*Math.PI * Orrery.rng.next(), 0];
             let rot = objects[0].offset.rot;
             let scl = objects[0].offset.scl;
-            let rotSpeed = [0, -0.005 / pnum, 0];
-            let polSpeed = 0.0005 + 0.003 / pnum;
+            let rotSpeed = [0, -0.0075 / pnum, 0];
+            let polSpeed = 0.0005 + 0.004 / pnum;
             let incline = (pnum % 6 === 0) ? Math.PI/8 : Math.PI/24 * Orrery.rng.next();
             let offset = 2*Math.PI * Orrery.rng.next();
             let axisMode = undefined;

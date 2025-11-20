@@ -87,12 +87,10 @@ class Constants
     });
 
     // Global model list
-    static MODELS = [
-        'Chappy', 'Strawberry'
-    ];
+    static MODELS = [];
     static PLANETS = [
-        'Battlerock', 'BuoyBase', 'Dreadnought',
-        'DustyDune', 'Freezeflame', 'GustyGarden',
-        'MeltyMolten', 'SeaSlide'
+        'Chappy', 'Strawberry', 'Battlerock', 'BuoyBase',
+        'Dreadnought', 'DustyDune', 'Freezeflame', 'GustyGarden',
+        'MeltyMolten', 'SeaSlide',
     ];
 }

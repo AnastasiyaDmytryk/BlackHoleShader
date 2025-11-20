@@ -232,7 +232,7 @@ class WebGpu
             }),
             vertex: {
                 module: this.postShaderModule,
-                entryPoint: "vs_main",
+                entryPoint: "vertexMain",
                 buffers: [{
                     arrayStride: 4 * 4,
                     attributes: [{
@@ -244,7 +244,7 @@ class WebGpu
             },
             fragment: {
                 module: this.postShaderModule,
-                entryPoint: "fs_main",
+                entryPoint: "fragmentMain",
                 targets: [{ format: this.presentationFormat }],
             }
         });

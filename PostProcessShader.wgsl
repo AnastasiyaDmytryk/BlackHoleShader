@@ -1,18 +1,17 @@
-@group(0) @binding(0) var uSampler: sampler;
-@group(0) @binding(1) var uScreenTex: texture_2d<f32>;
 
-struct VSOut {
+// Binding definitions
+@group(0) @binding(0) var g_textureSampler: sampler;
+@group(0) @binding(1) var g_screenTexture: texture_2d<f32>;
+
+
+// Struct definitions
+struct FragmentParams {
     @builtin(position) pos: vec4f,
     @location(0) uv: vec2f,
 };
 
-@vertex
-fn vs_main(@location(0) pos: vec4f) -> VSOut {
-    var out: VSOut;
-    out.pos = pos;
-    out.uv = pos.xy * 0.5 + 0.5;  // convert from NDC → UV
-    return out;
-}
+
+// Various helper functions
 
 fn distort_blackhole(uv: vec2f) -> vec2f {
     let center = vec2f(0.5, 0.5);
@@ -29,14 +28,27 @@ fn distort_blackhole(uv: vec2f) -> vec2f {
     return uv;
 }
 
+
+// Vertex shader entry point
+@vertex
+fn vertexMain(@location(0) pos: vec4f) -> FragmentParams {
+    var ret: FragmentParams;
+    ret.pos = pos;
+    ret.uv = pos.xy * 0.5 + 0.5;
+    ret.uv.y = 1 - ret.uv.y;
+    return ret;
+}
+
+
+// Fragment shader entry point
 @fragment
-fn fs_main(in: VSOut) -> @location(0) vec4f {
-    var uv = distort_blackhole(in.uv);
-    var color = textureSample(uScreenTex, uSampler, uv);
+fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
+    var uv = distort_blackhole(params.uv);
+    var color = textureSample(g_screenTexture, g_textureSampler, uv);
 
     // Add a tint to the black hole
     let center = vec2f(0.5, 0.5);
-    let distToCenter = length(in.uv - center);
+    let distToCenter = length(params.uv - center);
     let tintRadius = 0.2;
     if (distToCenter < tintRadius) {
         let tintStrength = (1.0 - distToCenter / tintRadius);
