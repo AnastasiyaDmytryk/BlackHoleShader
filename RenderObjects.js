@@ -19,9 +19,17 @@ class Camera extends CameraBase
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        this.genericBG2 = gpu.device.createBindGroup({
-            label: "Local Camera generic bind group 2",
+        this.renderBG2 = gpu.device.createBindGroup({
+            label: "Local Camera render bind group 2",
             layout: gpu.renderPipeline.getBindGroupLayout(2),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.cameraUniformBuffer },
+            }],
+        });
+        this.singularityBG1 = gpu.device.createBindGroup({
+            label: "Local Camera singularity bind group 1",
+            layout: gpu.singularityPipeline.getBindGroupLayout(1),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.cameraUniformBuffer },
@@ -33,7 +41,10 @@ class Camera extends CameraBase
     }
 
     setBindGroups(commandPass) {
-        commandPass.setBindGroup(2, this.genericBG2);
+        if (gpu.renderPass === WebGpu.RenderPass.RENDER)
+            commandPass.setBindGroup(2, this.renderBG2);
+        else if (gpu.renderPass === WebGpu.RenderPass.SINGULARITY)
+            commandPass.setBindGroup(1, this.singularityBG1);
     }
 
     update() {}
@@ -637,12 +648,6 @@ class BlackHole extends GameObject
         // Spread operator ensures arrays are copied
         super([...loc], [...rot], [...scl]);
 
-        this.transformUniformBufferSize = Constants.SIZE.TRANSFORM_UNIFORM;
-        this.transformUniformBuffer = gpu.device.createBuffer({
-            label: "Local BlackHole transform buffer for " + this.id,
-            size: this.transformUniformBufferSize,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
         this.singularityUniformBufferSize = Constants.SIZE.SINGULARITY_UNIFORM;
         this.singularityUniformBuffer = gpu.device.createBuffer({
             label: "Local BlackHole singularity buffer for " + this.id,
@@ -651,42 +656,37 @@ class BlackHole extends GameObject
         });
 
         this.singularityBG0 = gpu.device.createBindGroup({
-            label: "Local BlackHole singularity pipeline transform bind group",
-            layout: gpu.singularityPipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.transformUniformBuffer },
-            }],
-        });
-        this.singularityBG1 = gpu.device.createBindGroup({
             label: "Local BlackHole singularity pipeline singularity bind group",
-            layout: gpu.singularityPipeline.getBindGroupLayout(1),
+            layout: gpu.singularityPipeline.getBindGroupLayout(0),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.singularityUniformBuffer },
             }, {
                 binding: 1,
-                resource: gpu.genericSampler
+                resource: gpu.genericSampler,
             }, {
                 binding: 2,
-                resource: gpu.renderPassTextureView
+                resource: gpu.comparisonSampler,
+            }, {
+                binding: 3,
+                resource: gpu.renderPassTextureView,
+            }, {
+                binding: 4,
+                resource: gpu.renderPassDepthTextureView,
             }],
         });
     }
 
     setBindGroups(commandPass) {
         commandPass.setBindGroup(0, this.singularityBG0);
-        commandPass.setBindGroup(1, this.singularityBG1);
     }
 
     update() {}
 
     render(commandPass, offset) {
         // Render self
-        var mWorldOffsetT = math.transpose(offset);
         this.setBindGroups(commandPass);
 
-        //gpu.device.queue.writeBuffer(this.transformUniformBuffer, Constants.OFFSET.OBJECT_UNIFORM.TRANSFORM, new Float32Array(math.flatten(mWorldOffsetT)._data));
         gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 0, new Float32Array([0,0,0]));
         gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 12, new Float32Array([5]));
     }

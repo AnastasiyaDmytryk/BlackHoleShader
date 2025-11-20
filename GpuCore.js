@@ -13,6 +13,11 @@ class WebGpu
         SOLID: 1,
         TRIGGER: 2,
     });
+    static RenderPass = Object.freeze({
+        NONE: 0,
+        RENDER: 1,
+        SINGULARITY: 2,
+    });
     static TextureMode = Object.freeze({
         NONE: 0,
         AMBIENT:  1 << 0,
@@ -90,30 +95,33 @@ class WebGpu
         console.log("Set up context with device and format.");
 
         // Create textures, depth buffers, and samplers
-        this.depthTexture = this.device.createTexture({
+        this.renderPassDepthTexture = this.device.createTexture({
             label: "Depth texture for rendering",
             size: [this.canvas.width, this.canvas.height],
             format: "depth24plus",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
-        this.depthTextureView = this.depthTexture.createView();
+        this.renderPassDepthTextureView = this.renderPassDepthTexture.createView();
         this.renderPassTexture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
             format: this.presentationFormat,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
         this.renderPassTextureView = this.renderPassTexture.createView();
-        this.objectSampler = this.device.createSampler({
-            addressModeU: 'repeat',
-            addressModeV: 'repeat',
-            magFilter: 'nearest',
-            minFilter: 'linear',
+        this.comparisonSampler = this.device.createSampler({
+            compare: "less",
         });
         this.genericSampler = this.device.createSampler({
             addressModeU: 'clamp-to-edge',
             addressModeV: 'clamp-to-edge',
             magFilter: 'linear',
             minFilter: 'linear'
+        });
+        this.objectSampler = this.device.createSampler({
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+            magFilter: 'nearest',
+            minFilter: 'linear',
         });
 
         // Create the rendering shaders
@@ -195,14 +203,6 @@ class WebGpu
                 buffer: { type: "uniform" },
             }],
         });
-        this.transformBindGroupLayout = this.device.createBindGroupLayout({
-            label: "Transform bind group layout",
-            entries: [{
-                binding: 0,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                buffer: { type: "uniform" },
-            }],
-        });
         this.singularityBindGroupLayout = this.device.createBindGroupLayout({
             label: "Singularity bind group layout",
             entries: [{
@@ -216,7 +216,15 @@ class WebGpu
             }, {
                 binding: 2,
                 visibility: GPUShaderStage.FRAGMENT,
+                sampler: { type: "comparison" },
+            }, {
+                binding: 3,
+                visibility: GPUShaderStage.FRAGMENT,
                 texture: {}
+            }, {
+                binding: 4,
+                visibility: GPUShaderStage.FRAGMENT,
+                texture: { sampleType: 'depth' },
             }],
         });
 
@@ -249,8 +257,9 @@ class WebGpu
             },
         });
         this.singularityPipeline = this.device.createRenderPipeline({
+            label: "Singularity Pipeline",
             layout: this.device.createPipelineLayout({
-                bindGroupLayouts: [this.transformBindGroupLayout, this.singularityBindGroupLayout, this.sceneBindGroupLayout],
+                bindGroupLayouts: [this.singularityBindGroupLayout, this.sceneBindGroupLayout],
             }),
             vertex: {
                 module: this.singularityShaderModule,
@@ -353,30 +362,28 @@ class WebGpu
             }],
         });
         this.global_singularityBindGroup0 = this.device.createBindGroup({
-            label: "Global singularity pipeline transform bind group",
-            layout: this.singularityPipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.dummy_objectBuffer },
-            }],
-        });
-        this.global_singularityBindGroup1 = this.device.createBindGroup({
             label: "Global singularity pipeline singularity bind group",
-            layout: this.singularityPipeline.getBindGroupLayout(1),
+            layout: this.singularityPipeline.getBindGroupLayout(0),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.dummy_singularityBuffer },
             }, {
                 binding: 1,
-                resource: this.genericSampler
+                resource: this.genericSampler,
             }, {
                 binding: 2,
-                resource: this.renderPassTextureView
+                resource: this.comparisonSampler,
+            }, {
+                binding: 3,
+                resource: this.renderPassTextureView,
+            }, {
+                binding: 4,
+                resource: this.renderPassDepthTextureView,
             }],
         });
-        this.global_singularityBindGroup2 = this.device.createBindGroup({
+        this.global_singularityBindGroup1 = this.device.createBindGroup({
             label: "Global singularity pipeline scene bind group",
-            layout: this.singularityPipeline.getBindGroupLayout(2),
+            layout: this.singularityPipeline.getBindGroupLayout(1),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.dummy_cameraBuffer },
@@ -397,7 +404,10 @@ class WebGpu
     }
     
     renderAll() {
+        this.renderPass = WebGpu.RenderPass.NONE;
+
         // Begin main rendering pass
+        this.renderPass = WebGpu.RenderPass.RENDER;
         const renderEncoder = this.device.createCommandEncoder();
         const renderCommandPass = renderEncoder.beginRenderPass({
             label: "Rendering command pass",
@@ -408,7 +418,7 @@ class WebGpu
                 storeOp: "store",
             }],
             depthStencilAttachment: {
-                view: this.depthTextureView,
+                view: this.renderPassDepthTextureView,
                 depthClearValue: 1.0,
                 depthLoadOp: "clear",
                 depthStoreOp: "store",
@@ -424,6 +434,7 @@ class WebGpu
         const renderCommands = renderEncoder.finish();
 
         // Begin singularity rendering pass
+        this.renderPass = WebGpu.RenderPass.SINGULARITY;
         const singularityEncoder = this.device.createCommandEncoder();
         const singularityCommandPass = singularityEncoder.beginRenderPass({
             label: "Singularity command pass",
@@ -443,6 +454,7 @@ class WebGpu
         const singularityCommands = singularityEncoder.finish();
 
         // Submit commands
+        this.renderPass = WebGpu.RenderPass.NONE;
         this.device.queue.submit([renderCommands, singularityCommands]);
     }
 
