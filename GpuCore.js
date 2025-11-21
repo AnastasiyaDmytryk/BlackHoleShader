@@ -33,20 +33,27 @@ class WebGpu
         this.Keys = {};
         this.objectCounter = 0;
         this.isReady = false;
-        this.gui = new GuiController();
+        this.gui = new SingularityGuiController();
         this.setupGpu().then(() => { this.slowStart(); });
     }
 
     async slowStart() {
-        this.camera = new MovableCamera([0,0,20], [0,3.14159,0]);
-        // this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
+        this.cameras = new CameraSystem();
+        this.cameras.addCamera(MovableCamera, [0,0,20], [0,3.14159,0]); // 1
+        this.cameras.addCamera(OrbitingCamera, [0,0,0], [0,0,0], 25); // 2
+        this.cameras.addCamera(OrbitingCamera, [0,0,0], [0,0,0], 50); // 3
+        this.cameras.addCamera(OrbitingCamera, [0,0,0], [0,0,0], 75); // 4
+        this.cameras.addCamera(Camera, [0, 30,0], [3.14159/2,0,0]); // 5
+        this.cameras.addCamera(Camera, [0, 60,0], [3.14159/2,0,0]); // 6
+        this.cameras.addCamera(Camera, [0,100,0], [3.14159/2,0,0]); // 7
+
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
         this.lights.addPointLight([0, 0, 0], [2,2,2]);
         this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.1);
+
+        this.singularity = new BlackHole([0,0,0], 6, 2, 100, 1, 1, 2);
         this.root = new Root();
-        this.quad = new ScreenQuad();
-        this.singularityRoot = new Root();
 
         var objects = [];
         for (const key of Constants.MODELS) {
@@ -72,8 +79,6 @@ class WebGpu
             p, this.getObjectIdByName(p.parentName), WebGpu.ObjectType.VISUAL
         ));
 
-        this.singularityRoot.children.push(new BlackHole([0,0,0], [0,0,0], [5,5,5]));
-
         requestAnimationFrame(WebGpu.mainLoop);
     }
 
@@ -94,37 +99,10 @@ class WebGpu
         });
         console.log("Set up context with device and format.");
 
-        // Create textures, depth buffers, and samplers
-        this.renderPassDepthTexture = this.device.createTexture({
-            label: "Depth texture for rendering",
-            size: [this.canvas.width, this.canvas.height],
-            format: "depth24plus",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        this.renderPassDepthTextureView = this.renderPassDepthTexture.createView();
-        this.renderPassTexture = this.device.createTexture({
-            size: [this.canvas.width, this.canvas.height],
-            format: this.presentationFormat,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        this.renderPassTextureView = this.renderPassTexture.createView();
-        this.comparisonSampler = this.device.createSampler({
-            compare: "less",
-        });
-        this.genericSampler = this.device.createSampler({
-            addressModeU: 'clamp-to-edge',
-            addressModeV: 'clamp-to-edge',
-            magFilter: 'linear',
-            minFilter: 'linear'
-        });
-        this.objectSampler = this.device.createSampler({
-            addressModeU: 'repeat',
-            addressModeV: 'repeat',
-            magFilter: 'nearest',
-            minFilter: 'linear',
-        });
+        // Define global textures
+        this.setupTextures();
 
-        // Create the rendering shaders
+        // Define the rendering shaders
         let renderShaderCode = await fetch('RenderShaderModule.wgsl').then(f=>f.text());
         this.renderShaderModule = this.device.createShaderModule({
             label: "Render Shader",
@@ -199,6 +177,10 @@ class WebGpu
             label: "Scene bind group layout",
             entries: [{
                 binding: 0,
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                buffer: { type: "uniform" },
+            }, {
+                binding: 1,
                 visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                 buffer: { type: "uniform" },
             }],
@@ -276,16 +258,75 @@ class WebGpu
         });
         console.log("Created the pipelines.");
 
+        // Define global buffers
+        this.setupBuffers();
         this.setupGlobals();
 
         this.isReady = true;
     }
 
-    setupGlobals() {
+    setupTextures() {
+        // Create pipeline textures and depth buffers
+        this.renderPassDepthTexture = this.device.createTexture({
+            label: "Depth texture for rendering",
+            size: [this.canvas.width, this.canvas.height],
+            format: "depth24plus",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.renderPassDepthTextureView = this.renderPassDepthTexture.createView();
+
+        this.renderPassTexture = this.device.createTexture({
+            size: [this.canvas.width, this.canvas.height],
+            format: this.presentationFormat,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.renderPassTextureView = this.renderPassTexture.createView();
+
+        // Create global samplers
+        this.comparisonSampler = this.device.createSampler({
+            compare: "less",
+        });
+        this.genericSampler = this.device.createSampler({
+            addressModeU: 'clamp-to-edge',
+            addressModeV: 'clamp-to-edge',
+            magFilter: 'linear',
+            minFilter: 'linear'
+        });
+        this.objectSampler = this.device.createSampler({
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+            magFilter: 'nearest',
+            minFilter: 'linear',
+        });
+
+        // Define dummy textures for objects to use
+        this.dummy_texture = this.device.createTexture({
+            label: 'Global dummy/missing texture',
+            size: [16, 16],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        });
+        this.device.queue.writeTexture(
+            { texture: this.dummy_texture },
+            new Uint8Array(WebGpu.createTextureMissing(16)),
+            { bytesPerRow: 16 * 4 },
+            { width: 16, height: 16 },
+        );
+        this.dummy_textureView = this.dummy_texture.createView();
+
+        console.log("Set up global textures.")
+    }
+
+    setupBuffers() {
         // Define global buffers for objects to use
         this.global_lightBuffer = this.device.createBuffer({
             label: "Global light buffer",
             size: Constants.SIZE.LIGHT_UNIFORM,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        this.global_debugBuffer = this.device.createBuffer({
+            label: "Global debug buffer",
+            size: Constants.SIZE.DEBUG_UNIFORM,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
@@ -306,21 +347,10 @@ class WebGpu
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        // Define dummy textures for objects to use
-        this.dummy_texture = this.device.createTexture({
-            label: 'Global dummy/missing texture',
-            size: [16, 16],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        });
-        this.device.queue.writeTexture(
-            { texture: this.dummy_texture },
-            new Uint8Array(WebGpu.createTextureMissing(16)),
-            { bytesPerRow: 16 * 4 },
-            { width: 16, height: 16 },
-        );
-        this.dummy_textureView = this.dummy_texture.createView();
+        console.log("Set up global buffers.");
+    }
 
+    setupGlobals() {
         // Define global bind group layouts
         this.global_renderBindGroup0 = this.device.createBindGroup({
             label: "Global render pipeline object bind group",
@@ -359,6 +389,9 @@ class WebGpu
             entries: [{
                 binding: 0,
                 resource: { buffer: this.dummy_cameraBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: this.global_debugBuffer },
             }],
         });
         this.global_singularityBindGroup0 = this.device.createBindGroup({
@@ -387,24 +420,29 @@ class WebGpu
             entries: [{
                 binding: 0,
                 resource: { buffer: this.dummy_cameraBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: this.global_debugBuffer },
             }],
         });
 
-        console.log("Set up global buffers.");
+        console.log("Set up global bind groups.");
     }
 
     updateAll() {
         // Update objects
         this.gui.update();
-        this.camera.update();
+        this.cameras.update();
         this.lights.update();
         this.root.update();
-        this.quad.update();
-        this.singularityRoot.update();
+        this.singularity.update();
     }
     
     renderAll() {
         this.renderPass = WebGpu.RenderPass.NONE;
+
+        // The GUI writes some values to buffers via render()
+        this.gui.render();
 
         // Begin main rendering pass
         this.renderPass = WebGpu.RenderPass.RENDER;
@@ -427,7 +465,7 @@ class WebGpu
         renderCommandPass.setPipeline(this.renderPipeline);
         // Draw objects
         this.lights.render(renderCommandPass);
-        this.camera.render(renderCommandPass);
+        this.cameras.render(renderCommandPass);
         this.root.render(renderCommandPass);
         // End main rendering pass
         renderCommandPass.end();
@@ -445,10 +483,8 @@ class WebGpu
             }]
         });
         singularityCommandPass.setPipeline(this.singularityPipeline);
-        // TODO
-        this.camera.render(singularityCommandPass);
-        this.singularityRoot.render(singularityCommandPass);
-        this.quad.render(singularityCommandPass);
+        this.cameras.render(singularityCommandPass);
+        this.singularity.render(singularityCommandPass);
         // End singularity rendering pass
         singularityCommandPass.end();
         const singularityCommands = singularityEncoder.finish();

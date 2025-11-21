@@ -25,6 +25,9 @@ class Camera extends CameraBase
             entries: [{
                 binding: 0,
                 resource: { buffer: this.cameraUniformBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: gpu.global_debugBuffer },
             }],
         });
         this.singularityBG1 = gpu.device.createBindGroup({
@@ -33,6 +36,9 @@ class Camera extends CameraBase
             entries: [{
                 binding: 0,
                 resource: { buffer: this.cameraUniformBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: gpu.global_debugBuffer },
             }],
         });
 
@@ -85,6 +91,58 @@ class MovableCamera extends Camera
         else this.angVelocity[1] = 0;
         // Update position
         this.move();
+    }
+}
+
+class OrbitingCamera extends Camera
+{
+    constructor(loc, rot, radius) {
+        super(loc, rot);
+        this.radius = radius;
+    }
+
+    update() {
+        // Update self
+        var rdelta = 0.003 / (this.radius / 10);
+        this.rot[1] += rdelta;
+        this.loc[0] = -this.radius * Math.sin(this.rot[1]);
+        this.loc[2] = -this.radius * Math.cos(this.rot[1]);
+        // Update position
+        this.move();
+    }
+
+}
+
+class CameraSystem
+{
+    constructor() {
+        this.cameras = [];
+        this.maxCameras = 9;
+        this.currentCamera = undefined;
+    }
+
+    addCamera(prefab, ...args) {
+        if (this.cameras.length >= this.maxCameras) return undefined;
+        var cam = new prefab(...args);
+        this.cameras.push(cam);
+        if (this.currentCamera === undefined) this.currentCamera = cam;
+        return cam;
+    }
+
+    getCamera(index) {
+        return this.cameras[index];
+    }
+
+    update() {
+        this.cameras.forEach(cam => cam.update());
+        for (let i = this.maxCameras - 1; i >= 0; i--) {
+            if (gpu.Keys[(i+1).toString()]) this.currentCamera = this.cameras[i];
+        }
+    }
+
+    render(commandPass) {
+        if (this.currentCamera !== undefined)
+            this.currentCamera.render(commandPass);
     }
 }
 
@@ -610,43 +668,18 @@ class DrawableWavefrontPlanet extends PlanetBase
 }
 
 
-class ScreenQuad extends GameObject
-{
-    constructor() {
-        super([0,0,0], [0,0,0], [1,1,1]);
-
-        this.vertices = new Float32Array([
-        //   X  Y  Z  nX nY nZ   U V
-            -1,-1, 0,  0, 0, 1,  0,0,
-             1,-1, 0,  0, 0, 1,  0,0,
-            -1, 1, 0,  0, 0, 1,  0,0,
-            -1, 1, 0,  0, 0, 1,  0,0,
-             1,-1, 0,  0, 0, 1,  0,0,
-             1, 1, 0,  0, 0, 1,  0,0,
-        ]);
-        this.vertexBuffer = gpu.device.createBuffer({
-            label: "Fullscreen quad",
-            size: this.vertices.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        });
-        gpu.device.queue.writeBuffer(this.vertexBuffer, /*bufferOffset=*/0, this.vertices);
-    }
-
-    update() {}
-
-    render(commandPass, offset) {
-        // Render self
-        commandPass.setVertexBuffer(0, this.vertexBuffer);
-        commandPass.draw(this.vertices.length/(3+3+2)); /* vertexnum/sizeof(params) */
-    }
-}
-
-
 class BlackHole extends GameObject
 {
-    constructor(loc, rot, scl) {
+    constructor(loc, radius, horizon, halo, push, warp, bend) {
         // Spread operator ensures arrays are copied
-        super([...loc], [...rot], [...scl]);
+        super([...loc], [0,0,0], [1,1,1]);
+
+        this.effectRadius = radius;
+        this.horizonRadius = horizon;
+        this.haloFalloff = halo;
+        this.pushStrength = push;
+        this.warpStrength = warp;
+        this.bendStrength = bend;
 
         this.singularityUniformBufferSize = Constants.SIZE.SINGULARITY_UNIFORM;
         this.singularityUniformBuffer = gpu.device.createBuffer({
@@ -675,6 +708,23 @@ class BlackHole extends GameObject
                 resource: gpu.renderPassDepthTextureView,
             }],
         });
+
+        // Full screen quad
+        this.vertices = new Float32Array([
+        //   X  Y  Z  nX nY nZ   U V
+            -1,-1, 0,  0, 0, 1,  0,0,
+             1,-1, 0,  0, 0, 1,  0,0,
+            -1, 1, 0,  0, 0, 1,  0,0,
+            -1, 1, 0,  0, 0, 1,  0,0,
+             1,-1, 0,  0, 0, 1,  0,0,
+             1, 1, 0,  0, 0, 1,  0,0,
+        ]);
+        this.vertexBuffer = gpu.device.createBuffer({
+            label: "Local BlackHole vertex buffer for " + this.id,
+            size: this.vertices.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+        gpu.device.queue.writeBuffer(this.vertexBuffer, /*bufferOffset=*/0, this.vertices);
     }
 
     setBindGroups(commandPass) {
@@ -687,9 +737,15 @@ class BlackHole extends GameObject
         // Render self
         this.setBindGroups(commandPass);
 
-        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 0, new Float32Array([0,0,0]));
-        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 12, new Float32Array([5]));
-        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, 16, new Float32Array([2.5]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.CENTER, new Float32Array(this.loc));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.EFFECT_RADIUS, new Float32Array([this.effectRadius]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.HORIZON_RADIUS, new Float32Array([this.horizonRadius]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.HALO_FALLOFF, new Float32Array([this.haloFalloff]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.PUSH_STRENGTH, new Float32Array([this.pushStrength]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.WARP_STRENGTH, new Float32Array([this.warpStrength]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.BEND_STRENGTH, new Float32Array([this.bendStrength]));
+
+        commandPass.setVertexBuffer(0, this.vertexBuffer);
+        commandPass.draw(this.vertices.length/(3+3+2)); /* vertexnum/sizeof(params) */
     }
-    
 }

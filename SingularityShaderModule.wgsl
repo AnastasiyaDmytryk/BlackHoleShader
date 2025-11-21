@@ -4,6 +4,10 @@ struct SingularityUniform {
     center: vec3f,
     effectRadius: f32,
     horizonRadius: f32,
+    haloFalloff: f32,
+    pushStrength: f32,
+    warpStrength: f32,
+    bendStrength: f32,
 }
 @group(0) @binding(0) var<uniform> u_singularity: SingularityUniform;
 
@@ -12,6 +16,7 @@ struct CameraUniform {
     rotation: vec4f,
 };
 @group(1) @binding(0) var<uniform> u_camera: CameraUniform;
+@group(1) @binding(1) var<uniform> u_debug: u32;
 
 
 // Non-uniform binding definitions
@@ -94,6 +99,20 @@ fn distort_blackhole(uv: vec2f, center: vec2f, radius: f32) -> vec2f {
     return uv;
 }
 
+fn distortUV(uv: vec2f, center: vec2f, radius: f32) -> vec2f {
+    let vecToCenter: vec2f = center - uv;
+    let distToCenter: f32 = length(vecToCenter);
+    let proportionToCenter: f32 = (radius - distToCenter) / radius;
+
+    let pushStrength: f32 = u_singularity.pushStrength;
+    let warpStrength: f32 = u_singularity.warpStrength;
+    let bendStrength: f32 = u_singularity.bendStrength;
+    let distortAmount: f32 = pow(proportionToCenter * warpStrength, bendStrength);
+    let distortFinal: vec2f = uv + normalize(vecToCenter) * pushStrength * distortAmount;
+
+    return distortFinal;
+}
+
 
 // Vertex shader entry point
 @vertex
@@ -111,32 +130,48 @@ fn vertexMain(@location(0) pos: vec3f, @location(1) nml: vec3f, @location(2) uvs
 @fragment
 fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
     // TODO: This probably shouldn't be done for every pixel
-    var truepos = perspectiveProjectCamera(transformCamera(vec4(u_singularity.center.xyz, 1)));
-    let perspective = truepos.w;
-    truepos = truepos / truepos.w;
+    let screenpos = perspectiveProjectCamera(transformCamera(vec4(u_singularity.center.xyz, 1)));
+    let perspective = screenpos.w;
+    let truepos = screenpos / perspective;
+    let trueuv = params.screen;
+
     let outerRadius = u_singularity.effectRadius / perspective;
     let innerRadius = u_singularity.horizonRadius / perspective;
     let center = vec2f(truepos.x * 0.5 + 0.5, 1 - (truepos.y * 0.5 + 0.5));
+    let distToCenter = length(center - trueuv);
 
     // Fragments in front of the singularity do not get distorted
-    let isFront = textureSampleCompare(g_screenDepthTexture, g_depthSampler, params.screen, truepos.z);
-    let distortuv = distort_blackhole(params.screen, center, outerRadius);
-    let trueuv = params.screen;
-    let uv = select(trueuv, distortuv, isFront == 1.0);
+    let isFront = textureSampleCompare(g_screenDepthTexture, g_depthSampler, trueuv, truepos.z);
+    let distortuv = distortUV(trueuv, center, outerRadius);
+    let uv = select(trueuv, distortuv, isFront == 1.0 && distToCenter < outerRadius);
 
-    let distToCenter = length(params.screen - center);
+    // Fragments in the inner radius are the event horizon
+    let trueColor = textureSample(g_screenTexture, g_textureSampler, trueuv);
     let distortColor = textureSample(g_screenTexture, g_textureSampler, uv);
-    var color = select(distortColor, vec4(0.0), distToCenter < innerRadius && isFront == 1.0);
-    return color;
+    let horizonColor = vec4(0.0) + pow(distToCenter / innerRadius, u_singularity.haloFalloff);
+    var color = select(distortColor, horizonColor, isFront == 1.0 && distToCenter < innerRadius);
 
-    // Add a tint to the black hole
-    let tintRadius = outerRadius;
-    if (distToCenter < tintRadius) {
-        let tintStrength = (1.0 - distToCenter / tintRadius);
-        let tintColor = vec3f(0.5, 0.1, 0.1); // red tint
-        // construct a new vec4f with tinted rgb
-        color = vec4f(mix(color.xyz, tintColor, tintStrength), color.a);
+    switch (u_debug) {
+        case 6: {
+            return trueColor;
+        }
+        case 7: {
+            return vec4f(trueuv, 0, 1);
+        }
+        case 8: {
+            return vec4f(uv, 0, 1);
+        }
+        case 9: {
+            return distortColor;
+        }
+        case 10: {
+            return select(distortColor, distortColor + 0.2, distToCenter < outerRadius);
+        }
+        case 11: {
+            return select(distortColor, select(distortColor + 0.2, distortColor - 0.2, distToCenter < innerRadius), distToCenter < outerRadius);
+        }
+        default: {
+            return color;
+        }
     }
-
-    return color;
 }
