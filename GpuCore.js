@@ -76,7 +76,7 @@ class WebGpu
         }
         console.log(planets);
         planets.forEach(p => Orrery.addPlanet(
-            p, this.getObjectIdByName(p.parentName), WebGpu.ObjectType.VISUAL
+            p, this.getObjectIdByName(p[0].parentName), WebGpu.ObjectType.VISUAL
         ));
 
         requestAnimationFrame(WebGpu.mainLoop);

@@ -1,5 +1,5 @@
 
-// Constant definitions
+// Constant and override definitions
 const PI: f32 = 3.141592653589793;
 
 const TEXTURE_MODE_NONE:     u32 = 0;
@@ -7,6 +7,10 @@ const TEXTURE_MODE_AMBIENT:  u32 = 1 << 0;
 const TEXTURE_MODE_DIFFUSE:  u32 = 1 << 1;
 const TEXTURE_MODE_SPECULAR: u32 = 1 << 2;
 const TEXTURE_MODE_NORMAL:   u32 = 1 << 3;
+
+const MAX_LIGHT_NUM_DIR:   u32 = 3;
+const MAX_LIGHT_NUM_POINT: u32 = 3;
+const MAX_LIGHT_NUM_SPOT:  u32 = 3;
 
 
 // Uniform definitions
@@ -43,10 +47,9 @@ struct LightUniform {    // size 512+10*48=992
     numDirLights: u32,   // byte 4
     numSpotLights: u32,  // byte 8
     ambientLight: vec3f, // byte 16
-    // TODO: pass as constants
-    dirLights: array<DirLight, 3>, // byte 32
-    pointLights: array<PointLight, 3>, // byte 32+5*32=192
-    spotLights: array<SpotLight, 3>, // byte 192+10*32=512
+    dirLights: array<DirLight, MAX_LIGHT_NUM_DIR>, // byte 32
+    pointLights: array<PointLight, MAX_LIGHT_NUM_POINT>, // byte 32+5*32=192
+    spotLights: array<SpotLight, MAX_LIGHT_NUM_SPOT>, // byte 192+10*32=512
 };
 @group(1) @binding(0) var<uniform> u_lights: LightUniform;
 
@@ -264,9 +267,6 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
     var normal: vec3f = normalize(params.normal.xyz);
     var reflect: vec3f; // normalize(reflect(-toSource, normal).xyz);
 
-    // TODO: pass as constants
-    let max_light: u32 = 3;
-
     // Normal mapping
     let sampleNormal: vec4f = textureSample(g_normalTexture, g_objectSampler, params.texuv);
     if (bool(u_object.textureMode & TEXTURE_MODE_NORMAL)) {
@@ -288,7 +288,7 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
 
     // Directional lights
     var dirLight: DirLight;
-    iterations = min(u_lights.numDirLights, max_light);
+    iterations = min(u_lights.numDirLights, MAX_LIGHT_NUM_DIR);
     for (var i = 0u; i < iterations; i++) {
         dirLight = u_lights.dirLights[i];
         toSource = normalize(-1.0 * dirLight.direction.xyz);
@@ -300,7 +300,7 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
 
     // Point lights
     var pointLight: PointLight;
-    iterations = min(u_lights.numPointLights, max_light);
+    iterations = min(u_lights.numPointLights, MAX_LIGHT_NUM_POINT);
     for (var i = 0u; i < iterations; i++) {
         pointLight = u_lights.pointLights[i];
         toSource = normalize(pointLight.position.xyz - params.world.xyz);
@@ -321,7 +321,7 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
 
     // Spotlights
     var spotLight: SpotLight;
-    iterations = min(u_lights.numSpotLights, max_light);
+    iterations = min(u_lights.numSpotLights, MAX_LIGHT_NUM_SPOT);
     for (var i = 0u; i < iterations; i++) {
         spotLight = u_lights.spotLights[i];
         toSource = normalize(spotLight.position.xyz - params.world.xyz);

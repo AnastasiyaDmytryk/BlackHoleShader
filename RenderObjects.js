@@ -341,8 +341,21 @@ class Orrery
                 );
             });
         } else {
-            // TODO
-            console.error('TODO: Planet parenting');
+            let pol = [5, 2*Math.PI * Orrery.rng.next(), 0];
+            let rot = objects[0].offset.rot;
+            let scl = objects[0].offset.scl;
+            let rotSpeed = [0, -0.0075, 0];
+            let polSpeed = 0.0005 + 0.004 * Orrery.rng.next();
+            let incline = Math.PI/8 * Orrery.rng.next();
+            let offset = 2*Math.PI * Orrery.rng.next();
+            let axisMode = Math.floor(3 * Orrery.rng.next());
+            objects.forEach(object => {
+                // pol, rot, scl, object, rotSpeed, polSpeed, incline, offset, axisMode
+                gpu.createParentedObject(
+                    parentId, type, DrawableWavefrontPlanet, pol, rot, scl, object,
+                    rotSpeed, polSpeed, incline, offset, axisMode
+                );
+            });
         }
     }
 }
