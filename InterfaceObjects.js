@@ -84,4 +84,8 @@ class SingularityGuiController extends GuiController
         gpu.singularity.warpStrength = GuiController.getSliderValue("control_warpStrength");
         gpu.singularity.bendStrength = GuiController.getSliderValue("control_bendStrength");
     }
+
+    render() {
+        gpu.device.queue.writeBuffer(gpu.global_debugBuffer, 0, new Uint32Array([GuiController.getButtonValue("swap_debug") % 12]));
+    }
 }

@@ -25,6 +25,9 @@ class Camera extends CameraBase
             entries: [{
                 binding: 0,
                 resource: { buffer: this.cameraUniformBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: gpu.global_debugBuffer },
             }],
         });
         this.singularityBG1 = gpu.device.createBindGroup({
@@ -33,6 +36,9 @@ class Camera extends CameraBase
             entries: [{
                 binding: 0,
                 resource: { buffer: this.cameraUniformBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: gpu.global_debugBuffer },
             }],
         });
 

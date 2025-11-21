@@ -198,6 +198,10 @@ class WebGpu
                 binding: 0,
                 visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                 buffer: { type: "uniform" },
+            }, {
+                binding: 1,
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                buffer: { type: "uniform" },
             }],
         });
         this.singularityBindGroupLayout = this.device.createBindGroupLayout({
@@ -285,6 +289,11 @@ class WebGpu
             size: Constants.SIZE.LIGHT_UNIFORM,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
+        this.global_debugBuffer = this.device.createBuffer({
+            label: "Global debug buffer",
+            size: Constants.SIZE.DEBUG_UNIFORM,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
 
         // Define dummy buffers for objects to use
         this.dummy_objectBuffer = this.device.createBuffer({
@@ -356,6 +365,9 @@ class WebGpu
             entries: [{
                 binding: 0,
                 resource: { buffer: this.dummy_cameraBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: this.global_debugBuffer },
             }],
         });
         this.global_singularityBindGroup0 = this.device.createBindGroup({
@@ -384,6 +396,9 @@ class WebGpu
             entries: [{
                 binding: 0,
                 resource: { buffer: this.dummy_cameraBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: this.global_debugBuffer },
             }],
         });
 
@@ -401,6 +416,9 @@ class WebGpu
     
     renderAll() {
         this.renderPass = WebGpu.RenderPass.NONE;
+
+        // The GUI writes some values to buffers via render()
+        this.gui.render();
 
         // Begin main rendering pass
         this.renderPass = WebGpu.RenderPass.RENDER;

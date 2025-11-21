@@ -59,7 +59,7 @@
                 <p> Forward/Back: W/S, Left/Right: A/D, Up/Down: Q/E, Speed Up/Down: +/- </p>
                 <br/>
                 <h3> Shader Controls: </h3>
-                <div id="controlbutton"> <button id="swap_1"> Swap 1 </button> </div>
+                <div id="controlbutton"> <button id="swap_debug"> Next Render Step </button> </div>
                 <div id="controlbutton"> <button id="swap_2"> Swap 2 </button> </div>
                 <div id="controlbutton"> <button id="swap_3"> Swap 3 </button> </div>
                 <div id="controlbutton">
@@ -108,7 +108,7 @@
             window.onkeydown = WebGpu.keyD;
             window.onkeyup = WebGpu.keyU;
             canvas.addEventListener("click", WebGpu.mouseH);
-            gpu.gui.addButtons("swap_1", "swap_2", "swap_3");
+            gpu.gui.addButtons("swap_debug", "swap_2", "swap_3");
             gpu.gui.addToggles("toggle_1", "toggle_2", "toggle_3");
             gpu.gui.addSliders(
                 "control_effectRadius", "control_horizonRadius", "control_haloFalloff",

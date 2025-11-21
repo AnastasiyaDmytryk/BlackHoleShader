@@ -25,6 +25,7 @@ class Constants
         OBJECT_UNIFORM: 64+48+16,
         LIGHT_UNIFORM: 32 + Constants.MAX_LIGHT_NUM.DIRECTIONAL*32 + Constants.MAX_LIGHT_NUM.POINT*32 + Constants.MAX_LIGHT_NUM.SPOT*48,
         CAMERA_UNIFORM: 32,
+        DEBUG_UNIFORM: 4,
         SINGULARITY_UNIFORM: 48,
     });
 
