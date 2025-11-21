@@ -91,37 +91,10 @@ class WebGpu
         });
         console.log("Set up context with device and format.");
 
-        // Create textures, depth buffers, and samplers
-        this.renderPassDepthTexture = this.device.createTexture({
-            label: "Depth texture for rendering",
-            size: [this.canvas.width, this.canvas.height],
-            format: "depth24plus",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        this.renderPassDepthTextureView = this.renderPassDepthTexture.createView();
-        this.renderPassTexture = this.device.createTexture({
-            size: [this.canvas.width, this.canvas.height],
-            format: this.presentationFormat,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        this.renderPassTextureView = this.renderPassTexture.createView();
-        this.comparisonSampler = this.device.createSampler({
-            compare: "less",
-        });
-        this.genericSampler = this.device.createSampler({
-            addressModeU: 'clamp-to-edge',
-            addressModeV: 'clamp-to-edge',
-            magFilter: 'linear',
-            minFilter: 'linear'
-        });
-        this.objectSampler = this.device.createSampler({
-            addressModeU: 'repeat',
-            addressModeV: 'repeat',
-            magFilter: 'nearest',
-            minFilter: 'linear',
-        });
+        // Define global textures
+        this.setupTextures();
 
-        // Create the rendering shaders
+        // Define the rendering shaders
         let renderShaderCode = await fetch('RenderShaderModule.wgsl').then(f=>f.text());
         this.renderShaderModule = this.device.createShaderModule({
             label: "Render Shader",
@@ -277,12 +250,66 @@ class WebGpu
         });
         console.log("Created the pipelines.");
 
+        // Define global buffers
+        this.setupBuffers();
         this.setupGlobals();
 
         this.isReady = true;
     }
 
-    setupGlobals() {
+    setupTextures() {
+        // Create pipeline textures and depth buffers
+        this.renderPassDepthTexture = this.device.createTexture({
+            label: "Depth texture for rendering",
+            size: [this.canvas.width, this.canvas.height],
+            format: "depth24plus",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.renderPassDepthTextureView = this.renderPassDepthTexture.createView();
+
+        this.renderPassTexture = this.device.createTexture({
+            size: [this.canvas.width, this.canvas.height],
+            format: this.presentationFormat,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.renderPassTextureView = this.renderPassTexture.createView();
+
+        // Create global samplers
+        this.comparisonSampler = this.device.createSampler({
+            compare: "less",
+        });
+        this.genericSampler = this.device.createSampler({
+            addressModeU: 'clamp-to-edge',
+            addressModeV: 'clamp-to-edge',
+            magFilter: 'linear',
+            minFilter: 'linear'
+        });
+        this.objectSampler = this.device.createSampler({
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+            magFilter: 'nearest',
+            minFilter: 'linear',
+        });
+
+        // Define dummy textures for objects to use
+        this.dummy_texture = this.device.createTexture({
+            label: 'Global dummy/missing texture',
+            size: [16, 16],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        });
+        this.device.queue.writeTexture(
+            { texture: this.dummy_texture },
+            new Uint8Array(WebGpu.createTextureMissing(16)),
+            { bytesPerRow: 16 * 4 },
+            { width: 16, height: 16 },
+        );
+        this.dummy_textureView = this.dummy_texture.createView();
+
+        console.log("Set up global textures.")
+    }
+
+    setupBuffers() {
         // Define global buffers for objects to use
         this.global_lightBuffer = this.device.createBuffer({
             label: "Global light buffer",
@@ -312,21 +339,10 @@ class WebGpu
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        // Define dummy textures for objects to use
-        this.dummy_texture = this.device.createTexture({
-            label: 'Global dummy/missing texture',
-            size: [16, 16],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        });
-        this.device.queue.writeTexture(
-            { texture: this.dummy_texture },
-            new Uint8Array(WebGpu.createTextureMissing(16)),
-            { bytesPerRow: 16 * 4 },
-            { width: 16, height: 16 },
-        );
-        this.dummy_textureView = this.dummy_texture.createView();
+        console.log("Set up global buffers.");
+    }
 
+    setupGlobals() {
         // Define global bind group layouts
         this.global_renderBindGroup0 = this.device.createBindGroup({
             label: "Global render pipeline object bind group",
@@ -402,7 +418,7 @@ class WebGpu
             }],
         });
 
-        console.log("Set up global buffers.");
+        console.log("Set up global bind groups.");
     }
 
     updateAll() {
@@ -459,7 +475,6 @@ class WebGpu
             }]
         });
         singularityCommandPass.setPipeline(this.singularityPipeline);
-        // TODO
         this.camera.render(singularityCommandPass);
         this.singularity.render(singularityCommandPass);
         // End singularity rendering pass

@@ -14,7 +14,6 @@ struct SingularityUniform {
 struct CameraUniform {
     translation: vec4f,
     rotation: vec4f,
-    // TODO: Debug mode
 };
 @group(1) @binding(0) var<uniform> u_camera: CameraUniform;
 @group(1) @binding(1) var<uniform> u_debug: u32;
