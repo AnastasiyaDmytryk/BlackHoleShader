@@ -94,6 +94,58 @@ class MovableCamera extends Camera
     }
 }
 
+class OrbitingCamera extends Camera
+{
+    constructor(loc, rot, radius) {
+        super(loc, rot);
+        this.radius = radius;
+    }
+
+    update() {
+        // Update self
+        var rdelta = 0.003 / (this.radius / 10);
+        this.rot[1] += rdelta;
+        this.loc[0] = -this.radius * Math.sin(this.rot[1]);
+        this.loc[2] = -this.radius * Math.cos(this.rot[1]);
+        // Update position
+        this.move();
+    }
+
+}
+
+class CameraSystem
+{
+    constructor() {
+        this.cameras = [];
+        this.maxCameras = 9;
+        this.currentCamera = undefined;
+    }
+
+    addCamera(prefab, ...args) {
+        if (this.cameras.length >= this.maxCameras) return undefined;
+        var cam = new prefab(...args);
+        this.cameras.push(cam);
+        if (this.currentCamera === undefined) this.currentCamera = cam;
+        return cam;
+    }
+
+    getCamera(index) {
+        return this.cameras[index];
+    }
+
+    update() {
+        this.cameras.forEach(cam => cam.update());
+        for (let i = this.maxCameras - 1; i >= 0; i--) {
+            if (gpu.Keys[(i+1).toString()]) this.currentCamera = this.cameras[i];
+        }
+    }
+
+    render(commandPass) {
+        if (this.currentCamera !== undefined)
+            this.currentCamera.render(commandPass);
+    }
+}
+
 
 class Light extends LightBase
 {

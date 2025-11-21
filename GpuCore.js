@@ -38,14 +38,22 @@ class WebGpu
     }
 
     async slowStart() {
-        this.camera = new MovableCamera([0,0,20], [0,3.14159,0]);
-        // this.camera = new MovableCamera([0,30,0], [3.14159/2,0,0]);
+        this.cameras = new CameraSystem();
+        this.cameras.addCamera(MovableCamera, [0,0,20], [0,3.14159,0]); // 1
+        this.cameras.addCamera(OrbitingCamera, [0,0,0], [0,0,0], 25); // 2
+        this.cameras.addCamera(OrbitingCamera, [0,0,0], [0,0,0], 50); // 3
+        this.cameras.addCamera(OrbitingCamera, [0,0,0], [0,0,0], 75); // 4
+        this.cameras.addCamera(Camera, [0, 30,0], [3.14159/2,0,0]); // 5
+        this.cameras.addCamera(Camera, [0, 60,0], [3.14159/2,0,0]); // 6
+        this.cameras.addCamera(Camera, [0,100,0], [3.14159/2,0,0]); // 7
+
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
         this.lights.addPointLight([0, 0, 0], [2,2,2]);
         this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.1);
-        this.root = new Root();
+
         this.singularity = new BlackHole([0,0,0], 6, 2, 100, 1, 1, 2);
+        this.root = new Root();
 
         var objects = [];
         for (const key of Constants.MODELS) {
@@ -424,7 +432,7 @@ class WebGpu
     updateAll() {
         // Update objects
         this.gui.update();
-        this.camera.update();
+        this.cameras.update();
         this.lights.update();
         this.root.update();
         this.singularity.update();
@@ -457,7 +465,7 @@ class WebGpu
         renderCommandPass.setPipeline(this.renderPipeline);
         // Draw objects
         this.lights.render(renderCommandPass);
-        this.camera.render(renderCommandPass);
+        this.cameras.render(renderCommandPass);
         this.root.render(renderCommandPass);
         // End main rendering pass
         renderCommandPass.end();
@@ -475,7 +483,7 @@ class WebGpu
             }]
         });
         singularityCommandPass.setPipeline(this.singularityPipeline);
-        this.camera.render(singularityCommandPass);
+        this.cameras.render(singularityCommandPass);
         this.singularity.render(singularityCommandPass);
         // End singularity rendering pass
         singularityCommandPass.end();
