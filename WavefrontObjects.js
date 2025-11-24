@@ -54,6 +54,7 @@ class WavefrontObject
         this.materialName = undefined;
         this.material = undefined;
         this.hasTextures = false;
+        this.hasMaterials = true;
         this.textureData = new TextureData();
         this.offset = { loc: [0,0,0], rot: [0,0,0], scl: [1,1,1] };
         this.parentName = undefined;
@@ -61,8 +62,8 @@ class WavefrontObject
 
     isValid() {
         if (this.name === undefined) return false;
-        if (this.materialName === undefined) return false;
-        if (this.material === undefined) return false;
+        if (this.hasMaterials && this.materialName === undefined) return false;
+        if (this.hasMaterials && this.material === undefined) return false;
         if (this.hasTextures && !this.textureData.isValid()) return false;
         return true;
     }
@@ -95,7 +96,7 @@ class WavefrontImporter
         this.parentOverride = undefined;
     }
 
-    // Returns a list of WaveFrontObjects parsed from the given file
+    // Returns a list of WavefrontObjects parsed from the given file
     async parse(file) {
 
         const objText = await fetch(file + '.obj').then(f=>f.text());
@@ -114,6 +115,18 @@ class WavefrontImporter
 
         return this.objects;
     }
+
+    // Returns a list of WavefrontObjects parsed from the given file (model only)
+    async modelParse(file) {
+        const objText = await fetch(file + '.obj').then(f=>f.text());
+        
+        // Parse through obj and add valid objects to this.objects
+        this.useMaterials = false;
+        this.ingestObjString(objText);
+
+        return this.objects;
+    }
+
 
     ingestObjString(str) {
         var lines = str.split('\n');
@@ -141,6 +154,7 @@ class WavefrontImporter
                     this.currentObject.name = data[0];
                     if (this.offsetOverride !== undefined) this.currentObject.offset = this.offsetOverride;
                     if (this.parentOverride !== undefined) this.currentObject.parentName = this.parentOverride;
+                    if (this.useMaterials !== undefined) this.currentObject.hasMaterials = this.useMaterials;
                     // Since .obj uses vertex buffering, different objects share file-scoped vertex data
                     this.currentObject.vertices = this.vertices;
                     this.currentObject.coorduvs = this.coorduvs;
@@ -167,6 +181,7 @@ class WavefrontImporter
                     this.currentObject.name = this.currentGroupParent.name;
                     this.currentObject.offset = this.currentGroupParent.offset;
                     this.currentObject.parentName = this.currentGroupParent.parentName;
+                    this.currentObject.hasMaterials = this.currentGroupParent.hasMaterials;
                     // Since .obj uses vertex buffering, different objects share file-scoped vertex data
                     this.currentObject.vertices = this.vertices;
                     this.currentObject.coorduvs = this.coorduvs;

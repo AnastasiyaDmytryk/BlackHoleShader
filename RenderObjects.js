@@ -20,11 +20,25 @@ class Camera extends CameraBase
         });
 
         this.renderBG2 = gpu.device.createBindGroup({
-            label: "Local Camera bind group",
-            layout: gpu.pipeline.getBindGroupLayout(2),
+            label: "Local Camera render bind group 2",
+            layout: gpu.renderPipeline.getBindGroupLayout(2),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.cameraUniformBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: gpu.global_debugBuffer },
+            }],
+        });
+        this.singularityBG1 = gpu.device.createBindGroup({
+            label: "Local Camera singularity bind group 1",
+            layout: gpu.singularityPipeline.getBindGroupLayout(1),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.cameraUniformBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: gpu.global_debugBuffer },
             }],
         });
 
@@ -33,9 +47,10 @@ class Camera extends CameraBase
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
+        if (gpu.renderPass === WebGpu.RenderPass.RENDER)
             commandPass.setBindGroup(2, this.renderBG2);
-        }
+        else if (gpu.renderPass === WebGpu.RenderPass.SINGULARITY)
+            commandPass.setBindGroup(1, this.singularityBG1);
     }
 
     update() {}
@@ -76,6 +91,58 @@ class MovableCamera extends Camera
         else this.angVelocity[1] = 0;
         // Update position
         this.move();
+    }
+}
+
+class OrbitingCamera extends Camera
+{
+    constructor(loc, rot, radius) {
+        super(loc, rot);
+        this.radius = radius;
+    }
+
+    update() {
+        // Update self
+        var rdelta = 0.003 / (this.radius / 10);
+        this.rot[1] += rdelta;
+        this.loc[0] = -this.radius * Math.sin(this.rot[1]);
+        this.loc[2] = -this.radius * Math.cos(this.rot[1]);
+        // Update position
+        this.move();
+    }
+
+}
+
+class CameraSystem
+{
+    constructor() {
+        this.cameras = [];
+        this.maxCameras = 9;
+        this.currentCamera = undefined;
+    }
+
+    addCamera(prefab, ...args) {
+        if (this.cameras.length >= this.maxCameras) return undefined;
+        var cam = new prefab(...args);
+        this.cameras.push(cam);
+        if (this.currentCamera === undefined) this.currentCamera = cam;
+        return cam;
+    }
+
+    getCamera(index) {
+        return this.cameras[index];
+    }
+
+    update() {
+        this.cameras.forEach(cam => cam.update());
+        for (let i = this.maxCameras - 1; i >= 0; i--) {
+            if (gpu.Keys[(i+1).toString()]) this.currentCamera = this.cameras[i];
+        }
+    }
+
+    render(commandPass) {
+        if (this.currentCamera !== undefined)
+            this.currentCamera.render(commandPass);
     }
 }
 
@@ -225,11 +292,9 @@ class LightSystem
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(0, gpu.global_renderBindGroup0);
-            commandPass.setBindGroup(1, gpu.global_renderBindGroup1);
-            commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
-        }
+        commandPass.setBindGroup(0, gpu.global_renderBindGroup0);
+        commandPass.setBindGroup(1, gpu.global_renderBindGroup1);
+        commandPass.setBindGroup(2, gpu.global_renderBindGroup2);
     }
 
     update() {
@@ -260,11 +325,11 @@ class Orrery
     static addPlanet(objects, parentId, type) {
         let pnum = ++Orrery.numPlanets;
         if (parentId === undefined) {
-            let pol = [pnum * 10, 2*Math.PI * Orrery.rng.next(), 0];
+            let pol = [5 + pnum * 10, 2*Math.PI * Orrery.rng.next(), 0];
             let rot = objects[0].offset.rot;
             let scl = objects[0].offset.scl;
-            let rotSpeed = [0, -0.005 / pnum, 0];
-            let polSpeed = 0.0005 + 0.003 / pnum;
+            let rotSpeed = [0, -0.0075 / pnum, 0];
+            let polSpeed = 0.0005 + 0.004 / pnum;
             let incline = (pnum % 6 === 0) ? Math.PI/8 : Math.PI/24 * Orrery.rng.next();
             let offset = 2*Math.PI * Orrery.rng.next();
             let axisMode = undefined;
@@ -366,7 +431,7 @@ class DrawableWavefrontObject extends GameObject
 
         this.renderBG0 = gpu.device.createBindGroup({
             label: "Local DrawableWavefrontObject render pipeline object bind group",
-            layout: gpu.pipeline.getBindGroupLayout(0),
+            layout: gpu.renderPipeline.getBindGroupLayout(0),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.objectUniformBuffer },
@@ -419,9 +484,7 @@ class DrawableWavefrontObject extends GameObject
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(0, this.renderBG0);
-        }
+        commandPass.setBindGroup(0, this.renderBG0);
     }
 
     update() {}
@@ -529,7 +592,7 @@ class DrawableWavefrontPlanet extends PlanetBase
 
         this.renderBG0 = gpu.device.createBindGroup({
             label: "Local DrawableWavefrontObject render pipeline object bind group",
-            layout: gpu.pipeline.getBindGroupLayout(0),
+            layout: gpu.renderPipeline.getBindGroupLayout(0),
             entries: [{
                 binding: 0,
                 resource: { buffer: this.objectUniformBuffer },
@@ -582,9 +645,7 @@ class DrawableWavefrontPlanet extends PlanetBase
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER) {
-            commandPass.setBindGroup(0, this.renderBG0);
-        }
+        commandPass.setBindGroup(0, this.renderBG0);
     }
 
     render(commandPass, offset) {
@@ -600,6 +661,89 @@ class DrawableWavefrontPlanet extends PlanetBase
         gpu.device.queue.writeBuffer(this.objectUniformBuffer, materialStart + Constants.OFFSET.MATERIAL.K_SPECULAR, new Float32Array(this.wavefrontObject.material.kSpecular));
         gpu.device.queue.writeBuffer(this.objectUniformBuffer, materialStart + Constants.OFFSET.MATERIAL.SHINE, new Float32Array([this.wavefrontObject.material.nSpecular]));
         gpu.device.queue.writeBuffer(this.objectUniformBuffer, Constants.OFFSET.OBJECT_UNIFORM.TEXTURE_MODE, new Uint32Array([this.wavefrontObject.textureData.textureMode | overrides]));
+
+        commandPass.setVertexBuffer(0, this.vertexBuffer);
+        commandPass.draw(this.vertices.length/(3+3+2)); /* vertexnum/sizeof(params) */
+    }
+}
+
+
+class BlackHole extends GameObject
+{
+    constructor(loc, radius, horizon, halo, push, warp, bend) {
+        // Spread operator ensures arrays are copied
+        super([...loc], [0,0,0], [1,1,1]);
+
+        this.effectRadius = radius;
+        this.horizonRadius = horizon;
+        this.haloFalloff = halo;
+        this.pushStrength = push;
+        this.warpStrength = warp;
+        this.bendStrength = bend;
+
+        this.singularityUniformBufferSize = Constants.SIZE.SINGULARITY_UNIFORM;
+        this.singularityUniformBuffer = gpu.device.createBuffer({
+            label: "Local BlackHole singularity buffer for " + this.id,
+            size: this.singularityUniformBufferSize,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+        this.singularityBG0 = gpu.device.createBindGroup({
+            label: "Local BlackHole singularity pipeline singularity bind group",
+            layout: gpu.singularityPipeline.getBindGroupLayout(0),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.singularityUniformBuffer },
+            }, {
+                binding: 1,
+                resource: gpu.genericSampler,
+            }, {
+                binding: 2,
+                resource: gpu.comparisonSampler,
+            }, {
+                binding: 3,
+                resource: gpu.renderPassTextureView,
+            }, {
+                binding: 4,
+                resource: gpu.renderPassDepthTextureView,
+            }],
+        });
+
+        // Full screen quad
+        this.vertices = new Float32Array([
+        //   X  Y  Z  nX nY nZ   U V
+            -1,-1, 0,  0, 0, 1,  0,0,
+             1,-1, 0,  0, 0, 1,  0,0,
+            -1, 1, 0,  0, 0, 1,  0,0,
+            -1, 1, 0,  0, 0, 1,  0,0,
+             1,-1, 0,  0, 0, 1,  0,0,
+             1, 1, 0,  0, 0, 1,  0,0,
+        ]);
+        this.vertexBuffer = gpu.device.createBuffer({
+            label: "Local BlackHole vertex buffer for " + this.id,
+            size: this.vertices.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+        gpu.device.queue.writeBuffer(this.vertexBuffer, /*bufferOffset=*/0, this.vertices);
+    }
+
+    setBindGroups(commandPass) {
+        commandPass.setBindGroup(0, this.singularityBG0);
+    }
+
+    update() {}
+
+    render(commandPass, offset) {
+        // Render self
+        this.setBindGroups(commandPass);
+
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.CENTER, new Float32Array(this.loc));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.EFFECT_RADIUS, new Float32Array([this.effectRadius]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.HORIZON_RADIUS, new Float32Array([this.horizonRadius]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.HALO_FALLOFF, new Float32Array([this.haloFalloff]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.PUSH_STRENGTH, new Float32Array([this.pushStrength]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.WARP_STRENGTH, new Float32Array([this.warpStrength]));
+        gpu.device.queue.writeBuffer(this.singularityUniformBuffer, Constants.OFFSET.SINGULARITY_UNIFORM.BEND_STRENGTH, new Float32Array([this.bendStrength]));
 
         commandPass.setVertexBuffer(0, this.vertexBuffer);
         commandPass.draw(this.vertices.length/(3+3+2)); /* vertexnum/sizeof(params) */

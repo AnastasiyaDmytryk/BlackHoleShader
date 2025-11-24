@@ -25,7 +25,8 @@ class Constants
         OBJECT_UNIFORM: 64+48+16,
         LIGHT_UNIFORM: 32 + Constants.MAX_LIGHT_NUM.DIRECTIONAL*32 + Constants.MAX_LIGHT_NUM.POINT*32 + Constants.MAX_LIGHT_NUM.SPOT*48,
         CAMERA_UNIFORM: 32,
-        SHADOW_UNIFORM: 12,
+        DEBUG_UNIFORM: 4,
+        SINGULARITY_UNIFORM: 48,
     });
 
     // Global buffer offset calculations
@@ -75,10 +76,14 @@ class Constants
             TRANSLATION: 0,
             ROTATION: 16,
         },
-        SHADOW_UNIFORM: {
-            ARRAY: 0,
-            INDEX: 4,
-            PASS_DIR: 8,
+        SINGULARITY_UNIFORM: {
+            CENTER: 0,
+            EFFECT_RADIUS: 12,
+            HORIZON_RADIUS: 16,
+            HALO_FALLOFF: 20,
+            PUSH_STRENGTH: 24,
+            WARP_STRENGTH: 28,
+            BEND_STRENGTH: 32,
         },
     });
 
@@ -87,12 +92,10 @@ class Constants
     });
 
     // Global model list
-    static MODELS = [
-        'Chappy', 'Strawberry'
-    ];
+    static MODELS = [];
     static PLANETS = [
-        'Battlerock', 'BuoyBase', 'Dreadnought',
-        'DustyDune', 'Freezeflame', 'GustyGarden',
-        'MeltyMolten', 'SeaSlide'
+        'Chappy', 'Strawberry', 'Battlerock', 'BuoyBase',
+        'Dreadnought', 'DustyDune', 'Freezeflame', 'GustyGarden',
+        'MeltyMolten', 'SeaSlide',
     ];
 }

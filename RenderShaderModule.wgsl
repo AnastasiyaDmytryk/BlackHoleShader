@@ -56,6 +56,7 @@ struct CameraUniform {
     rotation: vec4f,
 };
 @group(2) @binding(0) var<uniform> u_camera: CameraUniform;
+@group(2) @binding(1) var<uniform> u_debug: u32;
 
 
 // Non-uniform binding definitions
@@ -347,6 +348,21 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
     var final_kd: vec3f = u_object.material.kDiffuse;
     var final_ks: vec3f = u_object.material.kSpecular;
     if (u_object.textureMode == TEXTURE_MODE_NONE) {
+        switch (u_debug) {
+            case 1: {
+                return vec4f(final_ka, 1);
+            }
+            case 2: {
+                return vec4f(final_kd, 1);
+            }
+            case 3: {
+                return vec4f(final_ks, 1);
+            }
+            case 4: {
+                return vec4f(normal * 0.5 + 0.5, 1);
+            }
+            default: {}
+        }
         // Phong model: TotalColor = kA * iA + kD * iD + kS * iS
         return vec4f(final_ka*iAmbient + final_kd*iDiffuse + final_ks*iSpecular, 1.0);
     }
@@ -358,6 +374,22 @@ fn fragmentMain(params: FragmentParams) -> @location(0) vec4f {
     if (bool(u_object.textureMode & TEXTURE_MODE_AMBIENT)) { final_ka = sampleAmbient.rgb; }
     if (bool(u_object.textureMode & TEXTURE_MODE_DIFFUSE)) { final_kd = sampleDiffuse.rgb; }
     if (bool(u_object.textureMode & TEXTURE_MODE_SPECULAR)) { final_ks = sampleSpecular.rgb; }
+
+    switch (u_debug) {
+        case 1: {
+            return vec4f(final_ka, 1);
+        }
+        case 2: {
+            return vec4f(final_kd, 1);
+        }
+        case 3: {
+            return vec4f(final_ks, 1);
+        }
+        case 4: {
+            return vec4f(normal * 0.5 + 0.5, 1);
+        }
+        default: {}
+    }
 
     // Phong model: TotalColor = kA * iA + kD * iD + kS * iS
     return vec4f(final_ka*iAmbient + final_kd*iDiffuse + final_ks*iSpecular, sampleDiffuse.a);
