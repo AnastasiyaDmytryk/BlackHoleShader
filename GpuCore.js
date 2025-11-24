@@ -78,9 +78,39 @@ class WebGpu
         planets.forEach(p => Orrery.addPlanet(
             p, this.getObjectIdByName(p.parentName), WebGpu.ObjectType.VISUAL
         ));
+        
+        this.skybox = new Skybox(this, [
+            "/bkg1_back.png","/bkg1_bot.png","/bkg1_front.png",
+            "/bkg1_left.png","/bkg1_right.png","/bkg1_top.png"
+        ]);
+
+        const skyboxVertices = new Float32Array([
+            -1,-1,-1, 1,-1,-1, 1,1,-1,  -1,-1,-1, 1,1,-1, -1,1,-1,
+            -1,-1,1, 1,-1,1, 1,1,1,  -1,-1,1, 1,1,1, -1,1,1,
+            -1,1,-1, 1,1,-1, 1,1,1,  -1,1,-1, 1,1,1, -1,1,1,
+            -1,-1,-1, 1,-1,-1, 1,-1,1,  -1,-1,-1, 1,-1,1, -1,-1,1,
+            -1,-1,-1, -1,1,-1, -1,1,1,  -1,-1,-1, -1,1,1, -1,-1,1,
+            1,-1,-1, 1,1,-1, 1,1,1,  1,-1,-1, 1,1,1, 1,-1,1
+        ]);
+
+        this.skyboxVertexBuffer = this.device.createBuffer({
+            size: skyboxVertices.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+            mappedAtCreation: true
+        });
+        new Float32Array(this.skyboxVertexBuffer.getMappedRange()).set(skyboxVertices);
+        this.skyboxVertexBuffer.unmap();
+
+
 
         requestAnimationFrame(WebGpu.mainLoop);
     }
+   
+
+   
+
+
+
 
     async setupGpu() {
         this.adapter = await navigator.gpu.requestAdapter();
@@ -114,6 +144,12 @@ class WebGpu
             code: singularityShaderCode,
         });
         console.log("Created the rendering shaders.");
+        let skyboxShaderCode = await fetch("SkyboxShader.wgsl").then(r=>r.text());
+        this.skyboxShaderModule = this.device.createShaderModule({
+            label: "Skybox Shader",
+            code: skyboxShaderCode,
+        });
+
 
         // Define the vertex buffer layout
         this.vertexBufferLayout = {
@@ -209,6 +245,86 @@ class WebGpu
                 texture: { sampleType: 'depth' },
             }],
         });
+        // In setupGpu(), after creating skyboxShaderModule
+
+
+        // Skybox bind group layout
+        this.skyboxBindGroupLayout = this.device.createBindGroupLayout({
+    label: "Skybox bind group layout",
+    entries: [
+        {
+            binding: 0,
+            visibility: GPUShaderStage.FRAGMENT,
+            texture: { viewDimension: "2d-array", sampleType: "float" }  // or "unfilterable-float" if needed
+        },
+        {
+            binding: 1,
+            visibility: GPUShaderStage.FRAGMENT,
+            sampler: {}
+        }
+    ]
+    });
+
+        // Create a sampler for skybox
+        this.skyboxSampler = this.device.createSampler({
+            addressModeU: 'clamp-to-edge',
+            addressModeV: 'clamp-to-edge',
+            magFilter: 'linear',
+            minFilter: 'linear',
+        });
+       this.cubemapTexture = this.device.createTexture({
+    size: [2048, 2048, 6],   // width, height, layers
+    dimension: "2d",          // must be "2d"
+    format: "rgba8unorm",
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+});
+
+      this.cubemapTextureView = this.cubemapTexture.createView({
+    dimension: "2d-array",   // ✅ 2d-array
+    baseArrayLayer: 0,
+    arrayLayerCount: 6
+});
+
+    this.bindGroupSky = this.device.createBindGroup({
+                layout: this.skyboxBindGroupLayout,
+                entries: [
+                    {
+                        binding: 0,
+                        resource: this.cubemapTextureView, // texture view
+                    },
+                    {
+                        binding: 1,
+                        resource: this.skyboxSampler,
+                    }
+                ]
+            });
+
+       
+
+
+        // Create skybox pipeline
+        this.skyboxPipeline = this.device.createRenderPipeline({
+            label: "Skybox Pipeline",
+            layout: this.device.createPipelineLayout({
+                bindGroupLayouts: [this.skyboxBindGroupLayout, this.sceneBindGroupLayout],
+            }),
+            vertex: {
+                module: this.skyboxShaderModule,
+                entryPoint: "vertexMain",
+                buffers: [{
+                    arrayStride: 12,
+                    attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }],
+                }],
+            },
+            fragment: {
+                module: this.skyboxShaderModule,
+                entryPoint: "fragmentMain",
+                targets: [{ format: this.presentationFormat }],
+            },
+            primitive: { topology: "triangle-list", cullMode: "front" },
+            depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "less-equal" }
+        });
+
 
         // Define pipelines
         this.renderPipeline = this.device.createRenderPipeline({
@@ -257,6 +373,9 @@ class WebGpu
             }
         });
         console.log("Created the pipelines.");
+ 
+
+
 
         // Define global buffers
         this.setupBuffers();
@@ -266,90 +385,100 @@ class WebGpu
     }
 
     setupTextures() {
-        // Create pipeline textures and depth buffers
-        this.renderPassDepthTexture = this.device.createTexture({
-            label: "Depth texture for rendering",
-            size: [this.canvas.width, this.canvas.height],
-            format: "depth24plus",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        this.renderPassDepthTextureView = this.renderPassDepthTexture.createView();
+    // Depth texture for render pass
+    this.renderPassDepthTexture = this.device.createTexture({
+        label: "Depth texture for rendering",
+        size: [this.canvas.width, this.canvas.height],
+        format: "depth24plus",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | 
+               GPUTextureUsage.TEXTURE_BINDING | 
+               GPUTextureUsage.COPY_DST, // Add COPY_DST
+    });
+    this.renderPassDepthTextureView = this.renderPassDepthTexture.createView();
 
-        this.renderPassTexture = this.device.createTexture({
-            size: [this.canvas.width, this.canvas.height],
-            format: this.presentationFormat,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        this.renderPassTextureView = this.renderPassTexture.createView();
+    // Main render pass texture
+    this.renderPassTexture = this.device.createTexture({
+        size: [this.canvas.width, this.canvas.height],
+        format: this.presentationFormat,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | 
+               GPUTextureUsage.TEXTURE_BINDING | 
+               GPUTextureUsage.COPY_DST, // Add COPY_DST
+    });
+    this.renderPassTextureView = this.renderPassTexture.createView();
 
-        // Create global samplers
-        this.comparisonSampler = this.device.createSampler({
-            compare: "less",
-        });
-        this.genericSampler = this.device.createSampler({
-            addressModeU: 'clamp-to-edge',
-            addressModeV: 'clamp-to-edge',
-            magFilter: 'linear',
-            minFilter: 'linear'
-        });
-        this.objectSampler = this.device.createSampler({
-            addressModeU: 'repeat',
-            addressModeV: 'repeat',
-            magFilter: 'nearest',
-            minFilter: 'linear',
-        });
+    // Samplers
+    this.comparisonSampler = this.device.createSampler({ compare: "less" });
+    this.genericSampler = this.device.createSampler({
+        addressModeU: 'clamp-to-edge',
+        addressModeV: 'clamp-to-edge',
+        magFilter: 'linear',
+        minFilter: 'linear'
+    });
+    this.objectSampler = this.device.createSampler({
+        addressModeU: 'repeat',
+        addressModeV: 'repeat',
+        magFilter: 'nearest',
+        minFilter: 'linear',
+    });
 
-        // Define dummy textures for objects to use
-        this.dummy_texture = this.device.createTexture({
-            label: 'Global dummy/missing texture',
-            size: [16, 16],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        });
-        this.device.queue.writeTexture(
-            { texture: this.dummy_texture },
-            new Uint8Array(WebGpu.createTextureMissing(16)),
-            { bytesPerRow: 16 * 4 },
-            { width: 16, height: 16 },
-        );
-        this.dummy_textureView = this.dummy_texture.createView();
+    // Dummy missing texture
+    this.dummy_texture = this.device.createTexture({
+        label: 'Global dummy/missing texture',
+        size: [16, 16],
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST, // Add COPY_DST
+    });
+    this.device.queue.writeTexture(
+        { texture: this.dummy_texture },
+        new Uint8Array(WebGpu.createTextureMissing(16)),
+        { bytesPerRow: 16 * 4 },
+        { width: 16, height: 16 }
+    );
+    this.dummy_textureView = this.dummy_texture.createView();
 
-        console.log("Set up global textures.")
-    }
+    console.log("Textures and samplers initialized.");
+}
 
-    setupBuffers() {
-        // Define global buffers for objects to use
-        this.global_lightBuffer = this.device.createBuffer({
-            label: "Global light buffer",
-            size: Constants.SIZE.LIGHT_UNIFORM,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-        this.global_debugBuffer = this.device.createBuffer({
-            label: "Global debug buffer",
-            size: Constants.SIZE.DEBUG_UNIFORM,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
+setupBuffers() {
+    // Light buffer
+    this.global_lightBuffer = this.device.createBuffer({
+        label: "Global light buffer",
+        size: Constants.SIZE.LIGHT_UNIFORM,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
 
-        // Define dummy buffers for objects to use
-        this.dummy_objectBuffer = this.device.createBuffer({
-            label: "Dummy object buffer",
-            size: Constants.SIZE.OBJECT_UNIFORM,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-        this.dummy_cameraBuffer = this.device.createBuffer({
-            label: "Dummy camera buffer",
-            size: Constants.SIZE.CAMERA_UNIFORM,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-        this.dummy_singularityBuffer = this.device.createBuffer({
-            label: "Dummy singularity buffer",
-            size: Constants.SIZE.SINGULARITY_UNIFORM,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
+    // Debug buffer
+    this.global_debugBuffer = this.device.createBuffer({
+        label: "Global debug buffer",
+        size: Constants.SIZE.DEBUG_UNIFORM,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
 
-        console.log("Set up global buffers.");
-    }
+    // Dummy object buffer
+    this.dummy_objectBuffer = this.device.createBuffer({
+        label: "Dummy object buffer",
+        size: Constants.SIZE.OBJECT_UNIFORM,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
 
+    // Dummy camera buffer — FIX size to 64 bytes for mat4x4<f32>
+    this.dummy_cameraBuffer = this.device.createBuffer({
+        label: "Dummy camera buffer",
+        size: 128, // Must match shader's uniform struct (mat4x4)
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    // Dummy singularity buffer
+    this.dummy_singularityBuffer = this.device.createBuffer({
+        label: "Dummy singularity buffer",
+        size: Constants.SIZE.SINGULARITY_UNIFORM,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    console.log("Buffers initialized with correct sizes.");
+}
+
+    
     setupGlobals() {
         // Define global bind group layouts
         this.global_renderBindGroup0 = this.device.createBindGroup({
@@ -438,61 +567,95 @@ class WebGpu
         this.singularity.update();
     }
     
-    renderAll() {
-        this.renderPass = WebGpu.RenderPass.NONE;
+  renderAll() {
+    if (!this.isReady) return;
+    this.updateAll();
 
-        // The GUI writes some values to buffers via render()
-        this.gui.render();
+    // Command encoder for all passes
+    const encoder = this.device.createCommandEncoder();
 
-        // Begin main rendering pass
-        this.renderPass = WebGpu.RenderPass.RENDER;
-        const renderEncoder = this.device.createCommandEncoder();
-        const renderCommandPass = renderEncoder.beginRenderPass({
-            label: "Rendering command pass",
+    // ===== 1. Skybox Pass =====
+    {
+        const skyboxPass = encoder.beginRenderPass({
+            label: "Skybox Pass",
             colorAttachments: [{
                 view: this.renderPassTextureView,
                 clearValue: Constants.COLOR.CLEAR_COLOR,
                 loadOp: "clear",
-                storeOp: "store",
+                storeOp: "store"
             }],
             depthStencilAttachment: {
                 view: this.renderPassDepthTextureView,
                 depthClearValue: 1.0,
                 depthLoadOp: "clear",
-                depthStoreOp: "store",
+                depthStoreOp: "store"
             }
         });
-        renderCommandPass.setPipeline(this.renderPipeline);
-        // Draw objects
-        this.lights.render(renderCommandPass);
-        this.cameras.render(renderCommandPass);
-        this.root.render(renderCommandPass);
-        // End main rendering pass
-        renderCommandPass.end();
-        const renderCommands = renderEncoder.finish();
 
-        // Begin singularity rendering pass
-        this.renderPass = WebGpu.RenderPass.SINGULARITY;
-        const singularityEncoder = this.device.createCommandEncoder();
-        const singularityCommandPass = singularityEncoder.beginRenderPass({
-            label: "Singularity command pass",
+        skyboxPass.setPipeline(this.skyboxPipeline);
+        if (this.skybox && this.bindGroupSky) {
+            skyboxPass.setBindGroup(0, this.bindGroupSky);
+        }
+        skyboxPass.setBindGroup(1, this.global_renderBindGroup2);
+        skyboxPass.setVertexBuffer(0, this.skyboxVertexBuffer);
+        skyboxPass.draw(36, 1, 0, 0);
+
+        skyboxPass.end();
+    }
+
+    // ===== 2. Scene Pass =====
+    {
+        const scenePass = encoder.beginRenderPass({
+            label: "Scene Pass",
+            colorAttachments: [{
+                view: this.renderPassTextureView,
+                loadOp: "load", // keep skybox
+                storeOp: "store"
+            }],
+            depthStencilAttachment: {
+                view: this.renderPassDepthTextureView,
+                depthLoadOp: "load",
+                depthStoreOp: "store"
+            }
+        });
+
+        scenePass.setPipeline(this.renderPipeline);
+        scenePass.setBindGroup(0, this.global_renderBindGroup0);
+        scenePass.setBindGroup(1, this.global_renderBindGroup1);
+        scenePass.setBindGroup(2, this.global_renderBindGroup2);
+
+        this.root.render(scenePass);
+        this.lights.render(scenePass);
+        this.cameras.render(scenePass);
+
+        scenePass.end();
+    }
+
+    // ===== 3. Singularity Pass =====
+    {
+        const singularityPass = encoder.beginRenderPass({
+            label: "Singularity Pass",
             colorAttachments: [{
                 view: this.context.getCurrentTexture().createView(),
                 loadOp: "clear",
-                storeOp: "store",
+                storeOp: "store"
             }]
         });
-        singularityCommandPass.setPipeline(this.singularityPipeline);
-        this.cameras.render(singularityCommandPass);
-        this.singularity.render(singularityCommandPass);
-        // End singularity rendering pass
-        singularityCommandPass.end();
-        const singularityCommands = singularityEncoder.finish();
 
-        // Submit commands
-        this.renderPass = WebGpu.RenderPass.NONE;
-        this.device.queue.submit([renderCommands, singularityCommands]);
+        singularityPass.setPipeline(this.singularityPipeline);
+        singularityPass.setBindGroup(0, this.global_singularityBindGroup0);
+        singularityPass.setBindGroup(1, this.global_singularityBindGroup1);
+
+        this.cameras.render(singularityPass);
+        this.singularity.render(singularityPass);
+
+        singularityPass.end();
     }
+
+    // Submit all passes
+    this.device.queue.submit([encoder.finish()]);
+}
+
 
 
     checkCollision(loc1, rad1, loc2, rad2) {
