@@ -77,6 +77,7 @@ class SingularityGuiController extends GuiController
 {
     update() {
         super.update();
+        gpu.skybox = gpu.skyboxes[GuiController.getButtonValue("swap_skybox") % gpu.skyboxes.length];
         gpu.singularity.effectRadius = GuiController.getSliderValue("control_effectRadius");
         gpu.singularity.horizonRadius = GuiController.getSliderValue("control_horizonRadius");
         gpu.singularity.haloFalloff = GuiController.getSliderValue("control_haloFalloff");

@@ -92,6 +92,9 @@ class Constants
     });
 
     // Global model list
+    static SKYBOXES = [
+        'bkg1', 'panorama',
+    ];
     static MODELS = [];
     static PLANETS = [
         'Chappy', 'Strawberry', 'Battlerock', 'BuoyBase',

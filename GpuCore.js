@@ -53,18 +53,25 @@ class WebGpu
         this.lights.addPointLight([0, 0, 0], [2,2,2]);
         this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.1);
         
-        var importer = new SkyboxImporter('bkg1');
-        let loaded = await importer.load();
-        this.skybox = new Skybox(loaded);
+        var skyboxes = [];
+        for (const name of Constants.SKYBOXES) {
+            var importer = new SkyboxImporter();
+            let loaded = await importer.load('./Textures/Skybox/' + name);
+            skyboxes.push(loaded);
+        }
+        console.log(skyboxes);
+        this.skyboxes = [];
+        skyboxes.forEach(s => this.skyboxes.push(new Skybox(s)));
+        this.skybox = this.skyboxes[0];
 
         this.singularity = new BlackHole([0,0,0], 6, 2, 100, 1, 1, 2);
 
         this.root = new Root();
 
         var objects = [];
-        for (const key of Constants.MODELS) {
+        for (const name of Constants.MODELS) {
             var importer = new WavefrontImporter();
-            let parsed = await importer.parse('./Models/Static/' + key);
+            let parsed = await importer.parse('./Models/Static/' + name);
             objects = objects.concat(parsed);
         }
         console.log(objects);
@@ -75,9 +82,9 @@ class WebGpu
         ));
 
         var planets = [];
-        for (const key of Constants.PLANETS) {
+        for (const name of Constants.PLANETS) {
             var importer = new WavefrontImporter();
-            let parsed = await importer.parse('./Models/Planet/' + key);
+            let parsed = await importer.parse('./Models/Planet/' + name);
             planets.push(parsed);
         }
         console.log(planets);

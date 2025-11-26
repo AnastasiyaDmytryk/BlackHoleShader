@@ -33,17 +33,17 @@ class GpuTexture
 class SkyboxImporter
 {
     constructor(url) {
-        this.url = url;
         this.textures = [];
     }
 
-    async load() {
-        let suffixes = ['back', 'bot', 'front', 'left', 'right', 'top'];
+    async load(url) {
+        // WebGpu cubemap texture order: +x, -x, +y, -y, +z, -z 
+        let suffixes = ['right', 'left', 'top', 'bot', 'front', 'back'];
         var urls = [];
-        suffixes.forEach(suffix => { urls.push(this.url + '_' + suffix + '.png'); });
+        suffixes.forEach(suffix => { urls.push(url + '_' + suffix + '.png'); });
 
         for (let i = 0; i < 6; i++) {
-            let bitmap = await Utilities.getTextureAsBitmap('./Textures/Skybox/' + urls[i]);
+            let bitmap = await Utilities.getTextureAsBitmap(urls[i]);
             var texture = new GpuTexture();
             texture.name = urls[i];
             texture.bitmap = bitmap;
