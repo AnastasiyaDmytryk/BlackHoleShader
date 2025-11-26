@@ -75,6 +75,12 @@ class GuiController
 
 class SingularityGuiController extends GuiController
 {
+    getToggle(index) {
+        let toggles = ['toggle_skybox', 'toggle_render', 'toggle_update'];
+        if (index < 0 || index >= toggles.length) return;
+        return GuiController.getToggleValue(toggles[index]);
+    }
+
     update() {
         super.update();
         gpu.skybox = gpu.skyboxes[GuiController.getButtonValue("swap_skybox") % gpu.skyboxes.length];

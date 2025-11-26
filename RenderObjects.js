@@ -535,84 +535,6 @@ class DrawableWavefrontObject extends GameObject
 }
 
 
-class Skybox extends GameObject
-{
-    constructor(textures) {
-        super([0,0,0],[0,0,0],[1,1,1]);
-        if (textures.length !== 6) throw new Error("Skybox requires 6 textures.");
-        this.textureObjects = textures;
-
-        // Create textures
-        this.textureCubeMap = gpu.device.createTexture({
-            size: [this.textureObjects[0].bitmap.width, this.textureObjects[0].bitmap.height, 6],
-            dimension: "2d",
-            format: "rgba8unorm",
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-        });
-        for (let i = 0; i < 6; i++) {
-            gpu.device.queue.copyExternalImageToTexture(
-                { source: this.textureObjects[i].bitmap },
-                { texture: this.textureCubeMap, origin: [0, 0, i] },
-                [this.textureObjects[i].bitmap.width, this.textureObjects[i].bitmap.height, 1]
-            );
-        }
-
-        this.bindGroup = gpu.device.createBindGroup({
-            label: "Local Skybox skybox bind group.",
-            layout: gpu.skyboxBindGroupLayout,
-            entries: [{
-                binding: 0,
-                resource: gpu.genericSampler,
-            }, {
-                binding: 1,
-                resource: this.textureCubeMap.createView({ dimension: "cube" }),
-            }],
-        });
-
-        // Full cube
-        const s = 10;
-        this.vertices = new Float32Array([
-            // Back face
-            -s,-s,-s,  s,-s,-s,  s, s,-s,
-            -s,-s,-s,  s, s,-s, -s, s,-s,
-            // Front face
-            -s,-s, s,  s,-s, s,  s, s, s,
-            -s,-s, s,  s, s, s, -s, s, s,
-            // Top face
-            -s, s,-s,  s, s,-s,  s, s, s,
-            -s, s,-s,  s, s, s, -s, s, s,
-            // Bottom face
-            -s,-s,-s,  s,-s,-s,  s,-s, s,
-            -s,-s,-s,  s,-s, s, -s,-s, s,
-            // Left face
-            -s,-s,-s, -s, s,-s, -s, s, s,
-            -s,-s,-s, -s, s, s, -s,-s, s,
-            // Right face
-             s,-s,-s,  s, s,-s,  s, s, s,
-             s,-s,-s,  s, s, s,  s,-s, s,
-        ]);
-        this.vertexBuffer = gpu.device.createBuffer({
-            size: this.vertices.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-        });
-        gpu.device.queue.writeBuffer(this.vertexBuffer, /*bufferOffset=*/0, this.vertices);
-    }
-
-    setBindGroups(commandPass) {
-        commandPass.setBindGroup(0, this.bindGroup);
-    }
-
-    update() {}
-
-    render(commandPass) {
-        this.setBindGroups(commandPass);
-        
-        commandPass.setVertexBuffer(0, this.vertexBuffer);
-        commandPass.draw(this.vertices.length/(3));
-    }
-}
-
-
 class DrawableWavefrontPlanet extends PlanetBase
 {
     constructor(pol, rot, scl, object, ...args) {
@@ -768,6 +690,84 @@ class DrawableWavefrontPlanet extends PlanetBase
 
         commandPass.setVertexBuffer(0, this.vertexBuffer);
         commandPass.draw(this.vertices.length/(3+3+2)); /* vertexnum/sizeof(params) */
+    }
+}
+
+
+class Skybox extends GameObject
+{
+    constructor(textures) {
+        super([0,0,0],[0,0,0],[1,1,1]);
+        if (textures.length !== 6) throw new Error("Skybox requires 6 textures.");
+        this.textureObjects = textures;
+
+        // Create textures
+        this.textureCubeMap = gpu.device.createTexture({
+            size: [this.textureObjects[0].bitmap.width, this.textureObjects[0].bitmap.height, 6],
+            dimension: "2d",
+            format: "rgba8unorm",
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        for (let i = 0; i < 6; i++) {
+            gpu.device.queue.copyExternalImageToTexture(
+                { source: this.textureObjects[i].bitmap },
+                { texture: this.textureCubeMap, origin: [0, 0, i] },
+                [this.textureObjects[i].bitmap.width, this.textureObjects[i].bitmap.height, 1]
+            );
+        }
+
+        this.bindGroup = gpu.device.createBindGroup({
+            label: "Local Skybox skybox bind group.",
+            layout: gpu.skyboxBindGroupLayout,
+            entries: [{
+                binding: 0,
+                resource: gpu.genericSampler,
+            }, {
+                binding: 1,
+                resource: this.textureCubeMap.createView({ dimension: "cube" }),
+            }],
+        });
+
+        // Full cube
+        const s = 10;
+        this.vertices = new Float32Array([
+            // Back face
+            -s,-s,-s,  s,-s,-s,  s, s,-s,
+            -s,-s,-s,  s, s,-s, -s, s,-s,
+            // Front face
+            -s,-s, s,  s,-s, s,  s, s, s,
+            -s,-s, s,  s, s, s, -s, s, s,
+            // Top face
+            -s, s,-s,  s, s,-s,  s, s, s,
+            -s, s,-s,  s, s, s, -s, s, s,
+            // Bottom face
+            -s,-s,-s,  s,-s,-s,  s,-s, s,
+            -s,-s,-s,  s,-s, s, -s,-s, s,
+            // Left face
+            -s,-s,-s, -s, s,-s, -s, s, s,
+            -s,-s,-s, -s, s, s, -s,-s, s,
+            // Right face
+             s,-s,-s,  s, s,-s,  s, s, s,
+             s,-s,-s,  s, s, s,  s,-s, s,
+        ]);
+        this.vertexBuffer = gpu.device.createBuffer({
+            size: this.vertices.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+        });
+        gpu.device.queue.writeBuffer(this.vertexBuffer, /*bufferOffset=*/0, this.vertices);
+    }
+
+    setBindGroups(commandPass) {
+        commandPass.setBindGroup(0, this.bindGroup);
+    }
+
+    update() {}
+
+    render(commandPass) {
+        this.setBindGroups(commandPass);
+        
+        commandPass.setVertexBuffer(0, this.vertexBuffer);
+        commandPass.draw(this.vertices.length/(3));
     }
 }
 

@@ -40,7 +40,7 @@ class WebGpu
 
     async slowStart() {
         this.cameras = new CameraSystem();
-        this.cameras.addCamera(MovableCamera, [0,0,20], [0,3.14159,0]); // 1
+        this.cameras.addCamera(MovableCamera, [0,0,-20], [0,0,0]); // 1
         this.cameras.addCamera(OrbitingCamera, [0,0,0], [0,0,0], 25); // 2
         this.cameras.addCamera(OrbitingCamera, [0,0,0], [0,0,0], 50); // 3
         this.cameras.addCamera(OrbitingCamera, [0,0,0], [0,0,0], 75); // 4
@@ -49,9 +49,8 @@ class WebGpu
         this.cameras.addCamera(Camera, [0,100,0], [3.14159/2,0,0]); // 7
 
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
-        this.lights.addDirLight([1,-1,1], [0.5,0.5,0.5]);
+        this.lights.addDirLight([1,-1,1], [0.3,0.3,0.3]);
         this.lights.addPointLight([0, 0, 0], [2,2,2]);
-        this.lights.addSpotLight([0,10,0], [0,-1,0], [0.2,0.2,0.2], 0.1);
         
         var skyboxes = [];
         for (const name of Constants.SKYBOXES) {
@@ -502,9 +501,10 @@ class WebGpu
 
     updateAll() {
         this.gui.update();
-        this.cameras.update();
         this.lights.update();
-        this.root.update();
+        this.cameras.update();
+        this.skybox.update();
+        if (!this.gui.getToggle(2)) this.root.update();
         this.singularity.update();
     }
     
@@ -513,7 +513,7 @@ class WebGpu
         this.renderPass = WebGpu.RenderPass.NONE;
 
         // Skybox Pass (Render skybox to texture)
-        {
+        if (!this.gui.getToggle(0)) {
             this.renderPass = WebGpu.RenderPass.SKYBOX;
             const skyboxPass = encoder.beginRenderPass({
                 label: "Skybox Pass",
@@ -540,24 +540,27 @@ class WebGpu
         }
         
         // Scene Pass (Render scene objects on top of skybox texture)
-        {
+        if (!this.gui.getToggle(1)) {
             this.renderPass = WebGpu.RenderPass.RENDER;
             const scenePass = encoder.beginRenderPass({
                 label: "Scene Pass",
                 colorAttachments: [{
                     view: this.renderPassTextureView,
-                    loadOp: "load",
+                    clearValue: Constants.COLOR.CLEAR_COLOR,
+                    loadOp: (!this.gui.getToggle(0)) ? "load" : "clear",
                     storeOp: "store"
                 }],
                 depthStencilAttachment: {
                     view: this.renderPassDepthTextureView,
-                    depthLoadOp: "load",
+                    depthClearValue: 1.0,
+                    depthLoadOp: (!this.gui.getToggle(0)) ? "load" : "clear",
                     depthStoreOp: "store"
                 }
             });
             scenePass.setPipeline(this.renderPipeline);
 
             // Render objects
+            this.gui.render(scenePass);
             this.lights.render(scenePass);
             this.cameras.render(scenePass);
             this.root.render(scenePass);
@@ -566,12 +569,13 @@ class WebGpu
         }
 
         // Singularity Pass (Apply black hole effect and render to canvas)
-        {
+        /* Final pass always runs */ {
             this.renderPass = WebGpu.RenderPass.SINGULARITY;
             const singularityPass = encoder.beginRenderPass({
                 label: "Singularity Pass",
                 colorAttachments: [{
                     view: this.context.getCurrentTexture().createView(),
+                    clearValue: Constants.COLOR.CLEAR_COLOR,
                     loadOp: "clear",
                     storeOp: "store"
                 }]

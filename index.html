@@ -63,16 +63,16 @@
                 <div id="controlbutton"> <button id="swap_skybox"> Change Skybox </button> </div>
                 <div id="controlbutton"> <button id="swap_3"> Swap 3 </button> </div>
                 <div id="controlbutton">
-                    <p> Toggle 1 </p>
-                    <input type="checkbox" id="toggle_1">
+                    <p> Disable Skybox </p>
+                    <input type="checkbox" id="toggle_skybox">
                 </div>
                 <div id="controlbutton">
-                    <p> Toggle 2 </p>
-                    <input type="checkbox" id="toggle_2">
+                    <p> Disable Objects </p>
+                    <input type="checkbox" id="toggle_render">
                 </div>
                 <div id="controlbutton">
-                    <p> Toggle 3 </p>
-                    <input type="checkbox" id="toggle_3">
+                    <p> Disable Movement </p>
+                    <input type="checkbox" id="toggle_update">
                 </div>
                 <div id="controlslider">
                     <p> Lensing Radius </p>
@@ -84,7 +84,7 @@
                 </div>
                 <div id="controlslider">
                     <p> Halo Strength </p>
-                    <span> 0 <input type="range" id="control_haloFalloff" min="0" max="200" step="1" value="100"> 200 </span>
+                    <span> 0 <input type="range" id="control_haloFalloff" min="0" max="200" step="1" value="150"> 200 </span>
                 </div>
                 <div id="controlslider">
                     <p> Distortion Distance </p>
@@ -108,8 +108,8 @@
             window.onkeydown = WebGpu.keyD;
             window.onkeyup = WebGpu.keyU;
             canvas.addEventListener("click", WebGpu.mouseH);
-            gpu.gui.addButtons("swap_debug", "swap_skybox", "swap_3");
-            gpu.gui.addToggles("toggle_1", "toggle_2", "toggle_3");
+            gpu.gui.addButtons("swap_debug", "swap_skybox");
+            gpu.gui.addToggles("toggle_skybox", "toggle_render", "toggle_update");
             gpu.gui.addSliders(
                 "control_effectRadius", "control_horizonRadius", "control_haloFalloff",
                 "control_pushStrength", "control_warpStrength", "control_bendStrength"
