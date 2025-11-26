@@ -80,8 +80,8 @@ class WebGpu
         ));
         
         this.skybox = new Skybox(this, [
-            "/bkg1_back.png","/bkg1_bot.png","/bkg1_front.png",
-            "/bkg1_left.png","/bkg1_right.png","/bkg1_top.png"
+            "bkg1_back.png","bkg1_bot.png","bkg1_front.png",
+            "bkg1_left.png","bkg1_right.png","bkg1_top.png"
         ]);
 
         const skyboxVertices = new Float32Array([
@@ -93,13 +93,7 @@ class WebGpu
             1,-1,-1, 1,1,-1, 1,1,1,  1,-1,-1, 1,1,1, 1,-1,1
         ]);
 
-        this.skyboxVertexBuffer = this.device.createBuffer({
-            size: skyboxVertices.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-            mappedAtCreation: true
-        });
-        new Float32Array(this.skyboxVertexBuffer.getMappedRange()).set(skyboxVertices);
-        this.skyboxVertexBuffer.unmap();
+        
 
 
 
@@ -245,17 +239,16 @@ class WebGpu
                 texture: { sampleType: 'depth' },
             }],
         });
-        // In setupGpu(), after creating skyboxShaderModule
+        // Replace the skybox bind group layout section in setupGpu()
+// Around line 300-320 in your GpuCore.js
 
-
-        // Skybox bind group layout
-        this.skyboxBindGroupLayout = this.device.createBindGroupLayout({
+this.skyboxBindGroupLayout = this.device.createBindGroupLayout({
     label: "Skybox bind group layout",
     entries: [
         {
             binding: 0,
             visibility: GPUShaderStage.FRAGMENT,
-            texture: { viewDimension: "2d-array", sampleType: "float" }  // or "unfilterable-float" if needed
+            texture: { viewDimension: "cube", sampleType: "float" }
         },
         {
             binding: 1,
@@ -263,69 +256,49 @@ class WebGpu
             sampler: {}
         }
     ]
-    });
-
-        // Create a sampler for skybox
-        this.skyboxSampler = this.device.createSampler({
-            addressModeU: 'clamp-to-edge',
-            addressModeV: 'clamp-to-edge',
-            magFilter: 'linear',
-            minFilter: 'linear',
-        });
-       this.cubemapTexture = this.device.createTexture({
-    size: [2048, 2048, 6],   // width, height, layers
-    dimension: "2d",          // must be "2d"
-    format: "rgba8unorm",
-    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
 });
 
-      this.cubemapTextureView = this.cubemapTexture.createView({
-    dimension: "2d-array",   // ✅ 2d-array
-    baseArrayLayer: 0,
-    arrayLayerCount: 6
+// Create a sampler for skybox
+this.skyboxSampler = this.device.createSampler({
+    addressModeU: 'clamp-to-edge',
+    addressModeV: 'clamp-to-edge',
+    magFilter: 'linear',
+    minFilter: 'linear',
 });
 
-    this.bindGroupSky = this.device.createBindGroup({
-                layout: this.skyboxBindGroupLayout,
-                entries: [
-                    {
-                        binding: 0,
-                        resource: this.cubemapTextureView, // texture view
-                    },
-                    {
-                        binding: 1,
-                        resource: this.skyboxSampler,
-                    }
-                ]
-            });
-
-       
-
-
-        // Create skybox pipeline
-        this.skyboxPipeline = this.device.createRenderPipeline({
-            label: "Skybox Pipeline",
-            layout: this.device.createPipelineLayout({
-                bindGroupLayouts: [this.skyboxBindGroupLayout, this.sceneBindGroupLayout],
-            }),
-            vertex: {
-                module: this.skyboxShaderModule,
-                entryPoint: "vertexMain",
-                buffers: [{
-                    arrayStride: 12,
-                    attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }],
-                }],
-            },
-            fragment: {
-                module: this.skyboxShaderModule,
-                entryPoint: "fragmentMain",
-                targets: [{ format: this.presentationFormat }],
-            },
-            primitive: { topology: "triangle-list", cullMode: "front" },
-            depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "less-equal" }
-        });
-
-
+// Create skybox pipeline
+this.skyboxPipeline = this.device.createRenderPipeline({
+    label: "Skybox Pipeline",
+    layout: this.device.createPipelineLayout({
+        bindGroupLayouts: [this.skyboxBindGroupLayout, this.sceneBindGroupLayout],
+    }),
+    vertex: {
+        module: this.skyboxShaderModule,
+        entryPoint: "vertexMain",
+        buffers: [{
+            arrayStride: 12, // 3 floats * 4 bytes
+            attributes: [{ 
+                shaderLocation: 0, 
+                offset: 0, 
+                format: "float32x3" 
+            }],
+        }],
+    },
+    fragment: {
+        module: this.skyboxShaderModule,
+        entryPoint: "fragmentMain",
+        targets: [{ format: this.presentationFormat }],
+    },
+    primitive: { 
+        topology: "triangle-list", 
+        cullMode: "front" // Cull front faces since we're inside the cube
+    },
+    depthStencil: { 
+        format: "depth24plus", 
+        depthWriteEnabled: false, // Don't write depth
+        depthCompare: "less-equal" 
+    }
+});
         // Define pipelines
         this.renderPipeline = this.device.createRenderPipeline({
             label: "Render Pipeline",
@@ -573,36 +546,37 @@ setupBuffers() {
 
     // Command encoder for all passes
     const encoder = this.device.createCommandEncoder();
-
-    // ===== 1. Skybox Pass =====
-    {
-        const skyboxPass = encoder.beginRenderPass({
-            label: "Skybox Pass",
-            colorAttachments: [{
-                view: this.renderPassTextureView,
-                clearValue: Constants.COLOR.CLEAR_COLOR,
-                loadOp: "clear",
-                storeOp: "store"
-            }],
-            depthStencilAttachment: {
-                view: this.renderPassDepthTextureView,
-                depthClearValue: 1.0,
-                depthLoadOp: "clear",
-                depthStoreOp: "store"
-            }
-        });
-
-        skyboxPass.setPipeline(this.skyboxPipeline);
-        if (this.skybox && this.bindGroupSky) {
-            skyboxPass.setBindGroup(0, this.bindGroupSky);
+{
+    const skyboxPass = encoder.beginRenderPass({
+        label: "Skybox Pass",
+        colorAttachments: [{
+            view: this.renderPassTextureView,
+            clearValue: Constants.COLOR.CLEAR_COLOR,
+            loadOp: "clear",
+            storeOp: "store"
+        }],
+        depthStencilAttachment: {
+            view: this.renderPassDepthTextureView,
+            depthClearValue: 1.0,
+            depthLoadOp: "clear",
+            depthStoreOp: "store"
         }
-        skyboxPass.setBindGroup(1, this.global_renderBindGroup2);
-        skyboxPass.setVertexBuffer(0, this.skyboxVertexBuffer);
-        skyboxPass.draw(36, 1, 0, 0);
+    });
 
-        skyboxPass.end();
+    // Set pipeline-level bind groups / camera (group 1)
+    skyboxPass.setPipeline(this.skyboxPipeline);
+    skyboxPass.setBindGroup(1, this.global_renderBindGroup2); // camera uniforms
+
+    // Draw the skybox only if it's ready
+    if (this.skybox && this.skybox.bindGroup) {
+        // supply the skybox's own bind group (group 0), its vertex buffer, and draw
+        skyboxPass.setBindGroup(0, this.skybox.bindGroup);
+        skyboxPass.setVertexBuffer(0, this.skybox.vertexBuffer);
+        skyboxPass.draw(36);
     }
 
+    skyboxPass.end();
+}
     // ===== 2. Scene Pass =====
     {
         const scenePass = encoder.beginRenderPass({
