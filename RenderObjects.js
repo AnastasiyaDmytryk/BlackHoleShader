@@ -41,6 +41,14 @@ class Camera extends CameraBase
                 resource: { buffer: gpu.global_debugBuffer },
             }],
         });
+        this.skyboxCameraBG = gpu.device.createBindGroup({
+        label: "Local Camera skybox bind group",
+        layout: gpu.skyboxCameraBindGroupLayout,
+        entries: [{
+            binding: 0,
+            resource: { buffer: this.cameraUniformBuffer },
+        }],
+    });
 
         gpu.device.queue.writeBuffer(this.cameraUniformBuffer, Constants.OFFSET.CAMERA_UNIFORM.TRANSLATION, new Float32Array(this.loc));
         gpu.device.queue.writeBuffer(this.cameraUniformBuffer, Constants.OFFSET.CAMERA_UNIFORM.ROTATION, new Float32Array(this.rot));

@@ -570,17 +570,23 @@ renderAll() {
         ? activeCamera.renderBG2 
         : this.global_renderBindGroup2;
     
-    // ===== TEST: Render skybox DIRECTLY to canvas =====
+    // Get skybox camera bind group
+    const skyboxCameraBindGroup = activeCamera && activeCamera.skyboxCameraBG
+        ? activeCamera.skyboxCameraBG
+        : this.global_skyboxCameraBG;
+    
+    // ===== 1. Skybox Pass =====
+    // Render skybox to OFFSCREEN texture (renderPassTextureView)
     {
         const skyboxPass = encoder.beginRenderPass({
             label: "Skybox Pass",
             colorAttachments: [{
-                view: this.context.getCurrentTexture().createView(), // Direct to canvas
-                clearValue: [1.0, 0.0, 1.0, 1.0], // Magenta for testing
+                view: this.renderPassTextureView, // CHANGED: back to offscreen
+                clearValue: Constants.COLOR.CLEAR_COLOR,
                 loadOp: "clear",
                 storeOp: "store"
             }],
-            depthStencilAttachment: { // ADD THIS BACK
+            depthStencilAttachment: {
                 view: this.renderPassDepthTextureView,
                 depthClearValue: 1.0,
                 depthLoadOp: "clear",
@@ -589,29 +595,25 @@ renderAll() {
         });
 
         skyboxPass.setPipeline(this.skyboxPipeline);
-        skyboxPass.setBindGroup(1, this.global_skyboxCameraBG);
+        skyboxPass.setBindGroup(1, skyboxCameraBindGroup); // Use real camera
 
         if (this.skybox && this.skybox.bindGroup && this.skybox.vertexBuffer) {
-            console.log("Drawing skybox..."); // Debug
             skyboxPass.setBindGroup(0, this.skybox.bindGroup);
             skyboxPass.setVertexBuffer(0, this.skybox.vertexBuffer);
             skyboxPass.draw(36);
-        } else {
-            console.log("Skybox not ready"); // Debug
         }
 
         skyboxPass.end();
     }
-
     
-    /*// ===== 2. Scene Pass =====
-    // Render scene objects on top of skybox
+    // ===== 2. Scene Pass =====
+    // Render scene objects ON TOP of skybox (same texture)
     {
         const scenePass = encoder.beginRenderPass({
             label: "Scene Pass",
             colorAttachments: [{
-                view: this.renderPassTextureView,
-                loadOp: "load", // Keep skybox - NO clearValue
+                view: this.renderPassTextureView, // Same texture as skybox
+                loadOp: "load", // KEEP the skybox we just drew
                 storeOp: "store"
             }],
             depthStencilAttachment: {
@@ -624,7 +626,7 @@ renderAll() {
         scenePass.setPipeline(this.renderPipeline);
         scenePass.setBindGroup(0, this.global_renderBindGroup0);
         scenePass.setBindGroup(1, this.global_renderBindGroup1);
-        scenePass.setBindGroup(2, cameraBindGroup); // Use camera's bind group here too
+        scenePass.setBindGroup(2, cameraBindGroup);
 
         this.root.render(scenePass);
         this.lights.render(scenePass);
@@ -634,13 +636,13 @@ renderAll() {
     }
 
     // ===== 3. Singularity Pass =====
-    // Apply black hole effect and render to final canvas
+    // Apply black hole effect and render to FINAL canvas
     {
         const singularityPass = encoder.beginRenderPass({
             label: "Singularity Pass",
             colorAttachments: [{
                 view: this.context.getCurrentTexture().createView(),
-                clearValue: [0.0, 0.0, 0.0, 1.0], // Black background
+                clearValue: [0.0, 0.0, 0.0, 1.0],
                 loadOp: "clear",
                 storeOp: "store"
             }]
@@ -648,15 +650,14 @@ renderAll() {
 
         singularityPass.setPipeline(this.singularityPipeline);
         singularityPass.setBindGroup(0, this.global_singularityBindGroup0);
-        singularityPass.setBindGroup(1, cameraBindGroup); // Use camera's bind group here too
+        singularityPass.setBindGroup(1, cameraBindGroup);
 
         this.cameras.render(singularityPass);
         this.singularity.render(singularityPass);
 
         singularityPass.end();
     }
-*/
-    // Submit all passes
+
     this.device.queue.submit([encoder.finish()]);
 }
 
