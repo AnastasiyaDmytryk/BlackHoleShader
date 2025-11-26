@@ -7,6 +7,23 @@
 
 
 /**
+ * Utilities
+ * 
+ * Static methods used accross multiple classes.
+ */
+class Utilities
+{
+    static async getTextureAsBitmap(url) {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const bitmap = await createImageBitmap(img);
+        return bitmap;
+    }
+}
+
+
+/**
  * Seeded random number generator.
  */
 class Srandom

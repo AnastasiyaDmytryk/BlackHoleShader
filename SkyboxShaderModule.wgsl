@@ -1,23 +1,28 @@
-// Skybox bindings
-@group(0) @binding(0) var myTexture: texture_cube<f32>;
-@group(0) @binding(1) var mySampler: sampler;
 
-// Camera bindings - MUST match your camera uniform structure
+// Uniform definitions
 struct CameraUniform {
     translation: vec4f,
     rotation: vec4f,
 };
 @group(1) @binding(0) var<uniform> u_camera: CameraUniform;
+@group(1) @binding(1) var<uniform> u_debug: u32;
 
-struct VertexOutput {
+
+// Non-uniform binding definitions
+@group(0) @binding(0) var mySampler: sampler;
+@group(0) @binding(1) var myTexture: texture_cube<f32>;
+
+
+// Other struct definitions
+struct FragmentParams {
     @builtin(position) position: vec4<f32>,
     @location(0) texCoord: vec3<f32>,
 };
 
-// Rotation ONLY (no translation) - skybox stays centered on camera
+
+// Various helper functions
+
 fn rotateCamera(vert: vec4f) -> vec4f {
-    // NO translation matrix - skybox is always centered on camera
-    
     let rcos: vec4f = cos(-1.0 * u_camera.rotation);
     let rsin: vec4f = sin(-1.0 * u_camera.rotation);
 
@@ -43,12 +48,11 @@ fn rotateCamera(vert: vec4f) -> vec4f {
     return (rotMz * rotMy * rotMx) * vert;
 }
 
-// Same perspective projection as your main shader
 fn perspectiveProjectCamera(vert: vec4f) -> vec4f {
     let n: f32 = 0.00001;
     let r: f32 = 0.00001;
     let t: f32 = 0.00001;
-    let f: f32 = 5000.0;
+    let f: f32 = 1.0;
 
     var perspectiveM: mat4x4<f32> = mat4x4<f32>(
         vec4( n/r, 0.0,         0.0, 0.0 ),
@@ -60,24 +64,23 @@ fn perspectiveProjectCamera(vert: vec4f) -> vec4f {
     return perspectiveM * vert;
 }
 
+
+
+// Vertex shader entry point
 @vertex
-fn vertexMain(@location(0) pos: vec3<f32>) -> VertexOutput {
-    var out: VertexOutput;
-    
-    // Apply rotation (but NOT translation) then projection
+fn vertexMain(@location(0) pos: vec3<f32>) -> FragmentParams {
+    var ret: FragmentParams;
     let rotated = rotateCamera(vec4<f32>(pos, 1.0));
     let projected = perspectiveProjectCamera(rotated);
-    
     // Set to far plane (z = w means depth = 1.0, furthest possible)
-    out.position = vec4<f32>(projected.xy, projected.w, projected.w);
-    
-    // Use original position as cubemap direction
-    out.texCoord = pos;
-    
-    return out;
+    ret.position = vec4<f32>(projected.xy, projected.w, projected.w);
+    ret.texCoord = pos;
+    return ret;
 }
 
+
+// Fragment shader entry point
 @fragment
-fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(myTexture, mySampler, in.texCoord);
+fn fragmentMain(params: FragmentParams) -> @location(0) vec4<f32> {
+    return textureSample(myTexture, mySampler, params.texCoord);
 }
