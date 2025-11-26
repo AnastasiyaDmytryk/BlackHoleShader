@@ -7,6 +7,55 @@
 
 
 /**
+ * Object representation of a GPU texture.
+ * 
+ * By default creates an empty (invalid) texture.
+ */
+class GpuTexture
+{
+    constructor() {
+        this.name = undefined;
+        this.bitmap = undefined;
+    }
+
+    isValid() {
+        return (this.name !== undefined && this.bitmap !== undefined);
+    }
+}
+
+
+/**
+ * Class to import skybox texture files into GpuTextures.
+ * 
+ * The importer loads the textures from their URL and converts them
+ * into an array of GpuTextures.
+ */
+class SkyboxImporter
+{
+    constructor(url) {
+        this.textures = [];
+    }
+
+    async load(url) {
+        // WebGpu cubemap texture order: +x, -x, +y, -y, +z, -z 
+        let suffixes = ['right', 'left', 'top', 'bot', 'front', 'back'];
+        var urls = [];
+        suffixes.forEach(suffix => { urls.push(url + '_' + suffix + '.png'); });
+
+        for (let i = 0; i < 6; i++) {
+            let bitmap = await Utilities.getTextureAsBitmap(urls[i]);
+            var texture = new GpuTexture();
+            texture.name = urls[i];
+            texture.bitmap = bitmap;
+            this.textures.push(texture);
+        }
+
+        return this.textures;
+    }
+}
+
+
+/**
  * Texture data representation for the Wavefront .obj format.
  * 
  * By default creates an empty object with no textures. Empty 
@@ -115,18 +164,6 @@ class WavefrontImporter
 
         return this.objects;
     }
-
-    // Returns a list of WavefrontObjects parsed from the given file (model only)
-    async modelParse(file) {
-        const objText = await fetch(file + '.obj').then(f=>f.text());
-        
-        // Parse through obj and add valid objects to this.objects
-        this.useMaterials = false;
-        this.ingestObjString(objText);
-
-        return this.objects;
-    }
-
 
     ingestObjString(str) {
         var lines = str.split('\n');
@@ -412,10 +449,7 @@ class WavefrontImporter
         if (this.bitmaps[file] !== undefined)
             return this.bitmaps[file];
         try {
-            const img = new Image();
-            img.src = "./Textures/" + file;
-            await img.decode();
-            const bitmap = await createImageBitmap(img);
+            const bitmap = await Utilities.getTextureAsBitmap("./Textures/" + file);
             // Cache the bitmap to minimize fetches
             this.bitmaps[file] = bitmap;
             return bitmap;

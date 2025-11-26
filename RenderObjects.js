@@ -19,6 +19,17 @@ class Camera extends CameraBase
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
+        this.skyboxBG1 = gpu.device.createBindGroup({
+            label: "Local Camera skybox bind group 1",
+            layout: gpu.skyboxPipeline.getBindGroupLayout(1),
+            entries: [{
+                binding: 0,
+                resource: { buffer: this.cameraUniformBuffer },
+            }, {
+                binding: 1,
+                resource: { buffer: gpu.global_debugBuffer },
+            }],
+        });
         this.renderBG2 = gpu.device.createBindGroup({
             label: "Local Camera render bind group 2",
             layout: gpu.renderPipeline.getBindGroupLayout(2),
@@ -41,21 +52,15 @@ class Camera extends CameraBase
                 resource: { buffer: gpu.global_debugBuffer },
             }],
         });
-        this.skyboxCameraBG = gpu.device.createBindGroup({
-        label: "Local Camera skybox bind group",
-        layout: gpu.skyboxCameraBindGroupLayout,
-        entries: [{
-            binding: 0,
-            resource: { buffer: this.cameraUniformBuffer },
-        }],
-    });
 
         gpu.device.queue.writeBuffer(this.cameraUniformBuffer, Constants.OFFSET.CAMERA_UNIFORM.TRANSLATION, new Float32Array(this.loc));
         gpu.device.queue.writeBuffer(this.cameraUniformBuffer, Constants.OFFSET.CAMERA_UNIFORM.ROTATION, new Float32Array(this.rot));
     }
 
     setBindGroups(commandPass) {
-        if (gpu.renderPass === WebGpu.RenderPass.RENDER)
+        if (gpu.renderPass === WebGpu.RenderPass.SKYBOX)
+            commandPass.setBindGroup(1, this.skyboxBG1);
+        else if (gpu.renderPass === WebGpu.RenderPass.RENDER)
             commandPass.setBindGroup(2, this.renderBG2);
         else if (gpu.renderPass === WebGpu.RenderPass.SINGULARITY)
             commandPass.setBindGroup(1, this.singularityBG1);
@@ -143,7 +148,7 @@ class CameraSystem
 
     update() {
         this.cameras.forEach(cam => cam.update());
-        for (let i = this.maxCameras - 1; i >= 0; i--) {
+        for (let i = this.cameras.length - 1; i >= 0; i--) {
             if (gpu.Keys[(i+1).toString()]) this.currentCamera = this.cameras[i];
         }
     }
@@ -349,8 +354,21 @@ class Orrery
                 );
             });
         } else {
-            // TODO
-            console.error('TODO: Planet parenting');
+            let pol = [5, 2*Math.PI * Orrery.rng.next(), 0];
+            let rot = objects[0].offset.rot;
+            let scl = objects[0].offset.scl;
+            let rotSpeed = [0, -0.0075, 0];
+            let polSpeed = 0.0005 + 0.004 * Orrery.rng.next();
+            let incline = Math.PI/8 * Orrery.rng.next();
+            let offset = 2*Math.PI * Orrery.rng.next();
+            let axisMode = Math.floor(3 * Orrery.rng.next());
+            objects.forEach(object => {
+                // pol, rot, scl, object, rotSpeed, polSpeed, incline, offset, axisMode
+                gpu.createParentedObject(
+                    parentId, type, DrawableWavefrontPlanet, pol, rot, scl, object,
+                    rotSpeed, polSpeed, incline, offset, axisMode
+                );
+            });
         }
     }
 }
@@ -672,6 +690,84 @@ class DrawableWavefrontPlanet extends PlanetBase
 
         commandPass.setVertexBuffer(0, this.vertexBuffer);
         commandPass.draw(this.vertices.length/(3+3+2)); /* vertexnum/sizeof(params) */
+    }
+}
+
+
+class Skybox extends GameObject
+{
+    constructor(textures) {
+        super([0,0,0],[0,0,0],[1,1,1]);
+        if (textures.length !== 6) throw new Error("Skybox requires 6 textures.");
+        this.textureObjects = textures;
+
+        // Create textures
+        this.textureCubeMap = gpu.device.createTexture({
+            size: [this.textureObjects[0].bitmap.width, this.textureObjects[0].bitmap.height, 6],
+            dimension: "2d",
+            format: "rgba8unorm",
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        for (let i = 0; i < 6; i++) {
+            gpu.device.queue.copyExternalImageToTexture(
+                { source: this.textureObjects[i].bitmap },
+                { texture: this.textureCubeMap, origin: [0, 0, i] },
+                [this.textureObjects[i].bitmap.width, this.textureObjects[i].bitmap.height, 1]
+            );
+        }
+
+        this.bindGroup = gpu.device.createBindGroup({
+            label: "Local Skybox skybox bind group.",
+            layout: gpu.skyboxBindGroupLayout,
+            entries: [{
+                binding: 0,
+                resource: gpu.genericSampler,
+            }, {
+                binding: 1,
+                resource: this.textureCubeMap.createView({ dimension: "cube" }),
+            }],
+        });
+
+        // Full cube
+        const s = 10;
+        this.vertices = new Float32Array([
+            // Back face
+            -s,-s,-s,  s,-s,-s,  s, s,-s,
+            -s,-s,-s,  s, s,-s, -s, s,-s,
+            // Front face
+            -s,-s, s,  s,-s, s,  s, s, s,
+            -s,-s, s,  s, s, s, -s, s, s,
+            // Top face
+            -s, s,-s,  s, s,-s,  s, s, s,
+            -s, s,-s,  s, s, s, -s, s, s,
+            // Bottom face
+            -s,-s,-s,  s,-s,-s,  s,-s, s,
+            -s,-s,-s,  s,-s, s, -s,-s, s,
+            // Left face
+            -s,-s,-s, -s, s,-s, -s, s, s,
+            -s,-s,-s, -s, s, s, -s,-s, s,
+            // Right face
+             s,-s,-s,  s, s,-s,  s, s, s,
+             s,-s,-s,  s, s, s,  s,-s, s,
+        ]);
+        this.vertexBuffer = gpu.device.createBuffer({
+            size: this.vertices.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+        });
+        gpu.device.queue.writeBuffer(this.vertexBuffer, /*bufferOffset=*/0, this.vertices);
+    }
+
+    setBindGroups(commandPass) {
+        commandPass.setBindGroup(0, this.bindGroup);
+    }
+
+    update() {}
+
+    render(commandPass) {
+        this.setBindGroups(commandPass);
+        
+        commandPass.setVertexBuffer(0, this.vertexBuffer);
+        commandPass.draw(this.vertices.length/(3));
     }
 }
 
