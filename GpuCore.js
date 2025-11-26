@@ -80,23 +80,9 @@ class WebGpu
         ));
         
         this.skybox = new Skybox(this, [
-            "bkg1_back.png","bkg1_bot.png","bkg1_front.png",
-            "bkg1_left.png","bkg1_right.png","bkg1_top.png"
+            "./bkg1_back.png","./bkg1_bot.png","./bkg1_front.png",
+            "./bkg1_left.png","./bkg1_right.png","./bkg1_top.png"
         ]);
-
-        const skyboxVertices = new Float32Array([
-            -1,-1,-1, 1,-1,-1, 1,1,-1,  -1,-1,-1, 1,1,-1, -1,1,-1,
-            -1,-1,1, 1,-1,1, 1,1,1,  -1,-1,1, 1,1,1, -1,1,1,
-            -1,1,-1, 1,1,-1, 1,1,1,  -1,1,-1, 1,1,1, -1,1,1,
-            -1,-1,-1, 1,-1,-1, 1,-1,1,  -1,-1,-1, 1,-1,1, -1,-1,1,
-            -1,-1,-1, -1,1,-1, -1,1,1,  -1,-1,-1, -1,1,1, -1,-1,1,
-            1,-1,-1, 1,1,-1, 1,1,1,  1,-1,-1, 1,1,1, 1,-1,1
-        ]);
-
-        
-
-
-
         requestAnimationFrame(WebGpu.mainLoop);
     }
    
@@ -239,8 +225,6 @@ class WebGpu
                 texture: { sampleType: 'depth' },
             }],
         });
-        // Replace the skybox bind group layout section in setupGpu()
-// Around line 300-320 in your GpuCore.js
 
 this.skyboxBindGroupLayout = this.device.createBindGroupLayout({
     label: "Skybox bind group layout",
@@ -258,6 +242,16 @@ this.skyboxBindGroupLayout = this.device.createBindGroupLayout({
     ]
 });
 
+// ADD THIS NEW LAYOUT - just for skybox camera (only 1 binding)
+this.skyboxCameraBindGroupLayout = this.device.createBindGroupLayout({
+    label: "Skybox camera bind group layout",
+    entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+        buffer: { type: "uniform" },
+    }]
+});
+
 // Create a sampler for skybox
 this.skyboxSampler = this.device.createSampler({
     addressModeU: 'clamp-to-edge',
@@ -266,17 +260,16 @@ this.skyboxSampler = this.device.createSampler({
     minFilter: 'linear',
 });
 
-// Create skybox pipeline
 this.skyboxPipeline = this.device.createRenderPipeline({
     label: "Skybox Pipeline",
     layout: this.device.createPipelineLayout({
-        bindGroupLayouts: [this.skyboxBindGroupLayout, this.sceneBindGroupLayout],
+        bindGroupLayouts: [this.skyboxBindGroupLayout, this.skyboxCameraBindGroupLayout],
     }),
     vertex: {
         module: this.skyboxShaderModule,
         entryPoint: "vertexMain",
         buffers: [{
-            arrayStride: 12, // 3 floats * 4 bytes
+            arrayStride: 12,
             attributes: [{ 
                 shaderLocation: 0, 
                 offset: 0, 
@@ -291,14 +284,15 @@ this.skyboxPipeline = this.device.createRenderPipeline({
     },
     primitive: { 
         topology: "triangle-list", 
-        cullMode: "front" // Cull front faces since we're inside the cube
+        cullMode: "none" // CHANGED: Disable culling for debugging
     },
     depthStencil: { 
         format: "depth24plus", 
-        depthWriteEnabled: false, // Don't write depth
-        depthCompare: "less-equal" 
+        depthWriteEnabled: false,
+        depthCompare: "less-equal" // CHANGED: from "always"
     }
 });
+
         // Define pipelines
         this.renderPipeline = this.device.createRenderPipeline({
             label: "Render Pipeline",
@@ -434,14 +428,29 @@ setupBuffers() {
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    // Dummy camera buffer — FIX size to 64 bytes for mat4x4<f32>
+   
     this.dummy_cameraBuffer = this.device.createBuffer({
         label: "Dummy camera buffer",
-        size: 128, // Must match shader's uniform struct (mat4x4)
+        size: 128,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    // Dummy singularity buffer
+
+const testMatrices = new Float32Array([
+    // View matrix (looking down -Z axis, camera at origin)
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+    
+    // Projection matrix (perspective: FOV ~90°, aspect 1:1, near=0.1, far=100)
+    1.0, 0, 0, 0,
+    0, 1.0, 0, 0,
+    0, 0, -1.002, -1.0,
+    0, 0, -0.2002, 0,
+]);
+this.device.queue.writeBuffer(this.dummy_cameraBuffer, 0, testMatrices);
+
     this.dummy_singularityBuffer = this.device.createBuffer({
         label: "Dummy singularity buffer",
         size: Constants.SIZE.SINGULARITY_UNIFORM,
@@ -453,7 +462,7 @@ setupBuffers() {
 
     
     setupGlobals() {
-        // Define global bind group layouts
+
         this.global_renderBindGroup0 = this.device.createBindGroup({
             label: "Global render pipeline object bind group",
             layout: this.renderPipeline.getBindGroupLayout(0),
@@ -527,12 +536,21 @@ setupBuffers() {
                 resource: { buffer: this.global_debugBuffer },
             }],
         });
+        this.global_skyboxCameraBG = this.device.createBindGroup({
+        label: "Global skybox camera bind group",
+        layout: this.skyboxCameraBindGroupLayout,
+        entries: [{
+            binding: 0,
+            resource: { buffer: this.dummy_cameraBuffer },
+        }],
+    });
+
 
         console.log("Set up global bind groups.");
     }
 
     updateAll() {
-        // Update objects
+
         this.gui.update();
         this.cameras.update();
         this.lights.update();
@@ -540,55 +558,65 @@ setupBuffers() {
         this.singularity.update();
     }
     
-  renderAll() {
+renderAll() {
     if (!this.isReady) return;
     this.updateAll();
 
-    // Command encoder for all passes
     const encoder = this.device.createCommandEncoder();
-{
-    const skyboxPass = encoder.beginRenderPass({
-        label: "Skybox Pass",
-        colorAttachments: [{
-            view: this.renderPassTextureView,
-            clearValue: Constants.COLOR.CLEAR_COLOR,
-            loadOp: "clear",
-            storeOp: "store"
-        }],
-        depthStencilAttachment: {
-            view: this.renderPassDepthTextureView,
-            depthClearValue: 1.0,
-            depthLoadOp: "clear",
-            depthStoreOp: "store"
+    
+    const activeCameraIndex = this.cameras.activeCamera || 0;
+    const activeCamera = this.cameras.cameras[activeCameraIndex];
+    const cameraBindGroup = activeCamera && activeCamera.renderBG2 
+        ? activeCamera.renderBG2 
+        : this.global_renderBindGroup2;
+    
+    // ===== TEST: Render skybox DIRECTLY to canvas =====
+    {
+        const skyboxPass = encoder.beginRenderPass({
+            label: "Skybox Pass",
+            colorAttachments: [{
+                view: this.context.getCurrentTexture().createView(), // Direct to canvas
+                clearValue: [1.0, 0.0, 1.0, 1.0], // Magenta for testing
+                loadOp: "clear",
+                storeOp: "store"
+            }],
+            depthStencilAttachment: { // ADD THIS BACK
+                view: this.renderPassDepthTextureView,
+                depthClearValue: 1.0,
+                depthLoadOp: "clear",
+                depthStoreOp: "store"
+            }
+        });
+
+        skyboxPass.setPipeline(this.skyboxPipeline);
+        skyboxPass.setBindGroup(1, this.global_skyboxCameraBG);
+
+        if (this.skybox && this.skybox.bindGroup && this.skybox.vertexBuffer) {
+            console.log("Drawing skybox..."); // Debug
+            skyboxPass.setBindGroup(0, this.skybox.bindGroup);
+            skyboxPass.setVertexBuffer(0, this.skybox.vertexBuffer);
+            skyboxPass.draw(36);
+        } else {
+            console.log("Skybox not ready"); // Debug
         }
-    });
 
-    // Set pipeline-level bind groups / camera (group 1)
-    skyboxPass.setPipeline(this.skyboxPipeline);
-    skyboxPass.setBindGroup(1, this.global_renderBindGroup2); // camera uniforms
-
-    // Draw the skybox only if it's ready
-    if (this.skybox && this.skybox.bindGroup) {
-        // supply the skybox's own bind group (group 0), its vertex buffer, and draw
-        skyboxPass.setBindGroup(0, this.skybox.bindGroup);
-        skyboxPass.setVertexBuffer(0, this.skybox.vertexBuffer);
-        skyboxPass.draw(36);
+        skyboxPass.end();
     }
 
-    skyboxPass.end();
-}
-    // ===== 2. Scene Pass =====
+    
+    /*// ===== 2. Scene Pass =====
+    // Render scene objects on top of skybox
     {
         const scenePass = encoder.beginRenderPass({
             label: "Scene Pass",
             colorAttachments: [{
                 view: this.renderPassTextureView,
-                loadOp: "load", // keep skybox
+                loadOp: "load", // Keep skybox - NO clearValue
                 storeOp: "store"
             }],
             depthStencilAttachment: {
                 view: this.renderPassDepthTextureView,
-                depthLoadOp: "load",
+                depthLoadOp: "load", // Keep skybox depth
                 depthStoreOp: "store"
             }
         });
@@ -596,7 +624,7 @@ setupBuffers() {
         scenePass.setPipeline(this.renderPipeline);
         scenePass.setBindGroup(0, this.global_renderBindGroup0);
         scenePass.setBindGroup(1, this.global_renderBindGroup1);
-        scenePass.setBindGroup(2, this.global_renderBindGroup2);
+        scenePass.setBindGroup(2, cameraBindGroup); // Use camera's bind group here too
 
         this.root.render(scenePass);
         this.lights.render(scenePass);
@@ -606,11 +634,13 @@ setupBuffers() {
     }
 
     // ===== 3. Singularity Pass =====
+    // Apply black hole effect and render to final canvas
     {
         const singularityPass = encoder.beginRenderPass({
             label: "Singularity Pass",
             colorAttachments: [{
                 view: this.context.getCurrentTexture().createView(),
+                clearValue: [0.0, 0.0, 0.0, 1.0], // Black background
                 loadOp: "clear",
                 storeOp: "store"
             }]
@@ -618,23 +648,19 @@ setupBuffers() {
 
         singularityPass.setPipeline(this.singularityPipeline);
         singularityPass.setBindGroup(0, this.global_singularityBindGroup0);
-        singularityPass.setBindGroup(1, this.global_singularityBindGroup1);
+        singularityPass.setBindGroup(1, cameraBindGroup); // Use camera's bind group here too
 
         this.cameras.render(singularityPass);
         this.singularity.render(singularityPass);
 
         singularityPass.end();
     }
-
+*/
     // Submit all passes
     this.device.queue.submit([encoder.finish()]);
 }
 
-
-
     checkCollision(loc1, rad1, loc2, rad2) {
-        // Return true if they collide, false if they don't.
-        // You could also pass two objects in as well.
         return false;
     }
 
