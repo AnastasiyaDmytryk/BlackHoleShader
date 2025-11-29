@@ -93,12 +93,13 @@ class Constants
 
     // Global model list
     static SKYBOXES = [
-        'bkg1', 'panorama',
+        'bkg1', 'nebula', 'cosmicjewels', 'panorama',
     ];
     static MODELS = [];
     static PLANETS = [
-        'Chappy', 'Strawberry', 'Battlerock', 'BuoyBase',
-        'Dreadnought', 'DustyDune', 'Freezeflame', 'GustyGarden',
-        'MeltyMolten', 'SeaSlide',
+        'BuoyBase', 'Chappy', 'Cube02', 'SeaSlide',
+        'Dreadnought', 'Cube01', 'DustyDune', 'Lemon',
+        'MeltyMolten', 'Battlerock', 'Freezeflame', 'GustyGarden',
+        'Strawberry', 
     ];
 }
