@@ -58,7 +58,7 @@ class WebGpu
             let loaded = await importer.load('./Textures/Skybox/' + name);
             skyboxes.push(loaded);
         }
-        console.log(skyboxes);
+        console.log('Skyboxes:', skyboxes);
         this.skyboxes = [];
         skyboxes.forEach(s => this.skyboxes.push(new Skybox(s)));
         this.skybox = this.skyboxes[0];
@@ -73,7 +73,7 @@ class WebGpu
             let parsed = await importer.parse('./Models/Static/' + name);
             objects = objects.concat(parsed);
         }
-        console.log(objects);
+        console.log('Statics:', objects);
         objects.forEach(o => this.createParentedObject(
             this.getObjectIdByName(o.parentName),
             WebGpu.ObjectType.VISUAL, DrawableWavefrontObject, 
@@ -86,7 +86,7 @@ class WebGpu
             let parsed = await importer.parse('./Models/Planet/' + name);
             planets.push(parsed);
         }
-        console.log(planets);
+        console.log('Planets:', planets);
         planets.forEach(p => Orrery.addPlanet(
             p, this.getObjectIdByName(p[0].parentName), WebGpu.ObjectType.VISUAL
         ));
@@ -369,19 +369,23 @@ class WebGpu
         });
 
         // Dummy missing texture
+        let textureMissing = WebGpu.createTextureMissing(16)
         this.dummy_texture = this.device.createTexture({
             label: 'Global dummy/missing texture',
-            size: [16, 16],
+            size: [16, 16, 6],
             format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST, // Add COPY_DST
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         });
-        this.device.queue.writeTexture(
-            { texture: this.dummy_texture },
-            new Uint8Array(WebGpu.createTextureMissing(16)),
-            { bytesPerRow: 16 * 4 },
-            { width: 16, height: 16 }
-        );
-        this.dummy_textureView = this.dummy_texture.createView();
+        for (let i = 0; i < 6; i++) {
+            this.device.queue.writeTexture(
+                { texture: this.dummy_texture, origin: [0, 0, i] },
+                new Uint8Array(textureMissing),
+                { bytesPerRow: 16 * 4 },
+                { width: 16, height: 16 }
+            );
+        }
+        this.dummy_textureView = this.dummy_texture.createView({ dimension: "2d" });
+        this.dummy_textureCubeView = this.dummy_texture.createView({ dimension: "cube" });
 
         console.log("Textures and samplers initialized.");
     }
@@ -422,78 +426,74 @@ class WebGpu
     }
 
     setupGlobals() {
+        this.global_skyboxBindGroupEntries = [{
+            binding: 0,
+            resource: this.genericSampler,
+        }, {
+            binding: 1,
+            resource: this.dummy_textureCubeView,
+        }];
+        this.global_objectBindGroupEntries = [{
+            binding: 0,
+            resource: { buffer: this.dummy_objectBuffer },
+        }, {
+            binding: 1,
+            resource: this.objectSampler,
+        }, {
+            binding: 2,
+            resource: this.dummy_textureView,
+        }, {
+            binding: 3,
+            resource: this.dummy_textureView,
+        }, {
+            binding: 4,
+            resource: this.dummy_textureView,
+        }, {
+            binding: 5,
+            resource: this.dummy_textureView,
+        }];
+        this.global_lightBindGroupEntries = [{
+            binding: 0,
+            resource: { buffer: this.global_lightBuffer },
+        }];
+        this.global_sceneBindGroupEntries = [{
+            binding: 0,
+            resource: { buffer: this.dummy_cameraBuffer },
+        }, {
+            binding: 1,
+            resource: { buffer: this.global_debugBuffer },
+        }];
+        this.global_singularityBindGroupEntries = [{
+            binding: 0,
+            resource: { buffer: this.dummy_singularityBuffer },
+        }, {
+            binding: 1,
+            resource: this.genericSampler,
+        }, {
+            binding: 2,
+            resource: this.comparisonSampler,
+        }, {
+            binding: 3,
+            resource: this.renderPassTextureView,
+        }, {
+            binding: 4,
+            resource: this.renderPassDepthTextureView,
+        }];
+
         this.global_renderBindGroup0 = this.device.createBindGroup({
             label: "Global render pipeline object bind group",
             layout: this.renderPipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.dummy_objectBuffer },
-            }, {
-                binding: 1,
-                resource: this.objectSampler,
-            }, {
-                binding: 2,
-                resource: this.dummy_textureView,
-            }, {
-                binding: 3,
-                resource: this.dummy_textureView,
-            }, {
-                binding: 4,
-                resource: this.dummy_textureView,
-            }, {
-                binding: 5,
-                resource: this.dummy_textureView,
-            }],
+            entries: this.global_objectBindGroupEntries,
         });
         this.global_renderBindGroup1 = this.device.createBindGroup({
             label: "Global render pipeline light bind group",
             layout: this.renderPipeline.getBindGroupLayout(1),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.global_lightBuffer },
-            }],
+            entries: this.global_lightBindGroupEntries,
         })
         this.global_renderBindGroup2 = this.device.createBindGroup({
             label: "Global render pipeline scene bind group",
             layout: this.renderPipeline.getBindGroupLayout(2),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.dummy_cameraBuffer },
-            }, {
-                binding: 1,
-                resource: { buffer: this.global_debugBuffer },
-            }],
-        });
-        this.global_singularityBindGroup0 = this.device.createBindGroup({
-            label: "Global singularity pipeline singularity bind group",
-            layout: this.singularityPipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.dummy_singularityBuffer },
-            }, {
-                binding: 1,
-                resource: this.genericSampler,
-            }, {
-                binding: 2,
-                resource: this.comparisonSampler,
-            }, {
-                binding: 3,
-                resource: this.renderPassTextureView,
-            }, {
-                binding: 4,
-                resource: this.renderPassDepthTextureView,
-            }],
-        });
-        this.global_singularityBindGroup1 = this.device.createBindGroup({
-            label: "Global singularity pipeline scene bind group",
-            layout: this.singularityPipeline.getBindGroupLayout(1),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.dummy_cameraBuffer },
-            }, {
-                binding: 1,
-                resource: { buffer: this.global_debugBuffer },
-            }],
+            entries: this.global_sceneBindGroupEntries,
         });
 
         console.log("Set up global bind groups.");

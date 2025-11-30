@@ -14,43 +14,32 @@ class Camera extends CameraBase
 
         this.cameraUniformBufferSize = Constants.SIZE.CAMERA_UNIFORM;
         this.cameraUniformBuffer = gpu.device.createBuffer({
-            label: "Local camera buffer",
+            label: "Local " + this.prefab + " camera buffer",
             size: this.cameraUniformBufferSize,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
+        const sceneBindGroupEntries = [
+            {
+                binding: 0,
+                resource: { buffer: this.cameraUniformBuffer },
+            },
+            gpu.global_sceneBindGroupEntries[1],
+        ];
         this.skyboxBG1 = gpu.device.createBindGroup({
             label: "Local Camera skybox bind group 1",
             layout: gpu.skyboxPipeline.getBindGroupLayout(1),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.cameraUniformBuffer },
-            }, {
-                binding: 1,
-                resource: { buffer: gpu.global_debugBuffer },
-            }],
+            entries: sceneBindGroupEntries,
         });
         this.renderBG2 = gpu.device.createBindGroup({
             label: "Local Camera render bind group 2",
             layout: gpu.renderPipeline.getBindGroupLayout(2),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.cameraUniformBuffer },
-            }, {
-                binding: 1,
-                resource: { buffer: gpu.global_debugBuffer },
-            }],
+            entries: sceneBindGroupEntries,
         });
         this.singularityBG1 = gpu.device.createBindGroup({
             label: "Local Camera singularity bind group 1",
             layout: gpu.singularityPipeline.getBindGroupLayout(1),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.cameraUniformBuffer },
-            }, {
-                binding: 1,
-                resource: { buffer: gpu.global_debugBuffer },
-            }],
+            entries: sceneBindGroupEntries,
         });
 
         gpu.device.queue.writeBuffer(this.cameraUniformBuffer, Constants.OFFSET.CAMERA_UNIFORM.TRANSLATION, new Float32Array(this.loc));
@@ -455,28 +444,32 @@ class DrawableWavefrontObject extends GameObject
             }
         }
 
-        this.renderBG0 = gpu.device.createBindGroup({
-            label: "Local DrawableWavefrontObject render pipeline object bind group",
-            layout: gpu.renderPipeline.getBindGroupLayout(0),
-            entries: [{
+        const globalEntries = gpu.global_objectBindGroupEntries;
+        const objectBindGroupEntries = [
+            {
                 binding: 0,
                 resource: { buffer: this.objectUniformBuffer },
             }, {
                 binding: 1,
-                resource: (texData.sampler === undefined) ? gpu.objectSampler : gpu[texData.sampler],
+                resource: (texData.sampler === undefined) ? globalEntries[1] : gpu[texData.sampler],
             }, {
                 binding: 2,
-                resource: (texMode & WebGpu.TextureMode.AMBIENT || this.ambientOverride) ? this.ambientTexture.createView() : gpu.dummy_textureView,
+                resource: (texMode & WebGpu.TextureMode.AMBIENT || this.ambientOverride) ? this.ambientTexture.createView() : globalEntries[2],
             }, {
                 binding: 3,
-                resource: (texMode & WebGpu.TextureMode.DIFFUSE) ? this.diffuseTexture.createView() : gpu.dummy_textureView,
+                resource: (texMode & WebGpu.TextureMode.DIFFUSE) ? this.diffuseTexture.createView() : globalEntries[3],
             }, {
                 binding: 4,
-                resource: (texMode & WebGpu.TextureMode.SPECULAR) ? this.specularTexture.createView() : gpu.dummy_textureView,
+                resource: (texMode & WebGpu.TextureMode.SPECULAR) ? this.specularTexture.createView() : globalEntries[4],
             }, {
                 binding: 5,
-                resource: (texMode & WebGpu.TextureMode.NORMAL) ? this.normalTexture.createView() : gpu.dummy_textureView,
-            }],
+                resource: (texMode & WebGpu.TextureMode.NORMAL) ? this.normalTexture.createView() : globalEntries[5],
+            },
+        ];
+        this.renderBG0 = gpu.device.createBindGroup({
+            label: "Local DrawableWavefrontObject render pipeline object bind group",
+            layout: gpu.renderPipeline.getBindGroupLayout(0),
+            entries: objectBindGroupEntries,
         });
 
         // Size of buffer is: faces * 3 vertices/face * (pos(vec3f) + normal(vec3f) + uvs(vec2f))
@@ -703,8 +696,8 @@ class Skybox extends GameObject
 
         // Create textures
         this.textureCubeMap = gpu.device.createTexture({
+            label: "Local Skybox cubemap texture",
             size: [this.textureObjects[0].bitmap.width, this.textureObjects[0].bitmap.height, 6],
-            dimension: "2d",
             format: "rgba8unorm",
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
@@ -716,16 +709,17 @@ class Skybox extends GameObject
             );
         }
 
+        const skyboxBindGroupEntries = [
+            gpu.global_skyboxBindGroupEntries[0],
+            {
+                binding: 1,
+                resource: this.textureCubeMap.createView({ dimension: "cube" }),
+            },
+        ]; 
         this.bindGroup = gpu.device.createBindGroup({
             label: "Local Skybox skybox bind group.",
             layout: gpu.skyboxBindGroupLayout,
-            entries: [{
-                binding: 0,
-                resource: gpu.genericSampler,
-            }, {
-                binding: 1,
-                resource: this.textureCubeMap.createView({ dimension: "cube" }),
-            }],
+            entries: skyboxBindGroupEntries,
         });
 
         // Full cube
@@ -792,25 +786,17 @@ class BlackHole extends GameObject
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
+        const singularityBindGroupEntries = [
+            {
+                binding: 0,
+                resource: { buffer: this.singularityUniformBuffer },
+            },
+            ...gpu.global_singularityBindGroupEntries.slice(1),
+        ];
         this.singularityBG0 = gpu.device.createBindGroup({
             label: "Local BlackHole singularity pipeline singularity bind group",
             layout: gpu.singularityPipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: this.singularityUniformBuffer },
-            }, {
-                binding: 1,
-                resource: gpu.genericSampler,
-            }, {
-                binding: 2,
-                resource: gpu.comparisonSampler,
-            }, {
-                binding: 3,
-                resource: gpu.renderPassTextureView,
-            }, {
-                binding: 4,
-                resource: gpu.renderPassDepthTextureView,
-            }],
+            entries: singularityBindGroupEntries,
         });
 
         // Full screen quad
