@@ -47,6 +47,8 @@ class WebGpu
         this.cameras.addCamera(Camera, [0, 30,0], [3.14159/2,0,0]); // 5
         this.cameras.addCamera(Camera, [0, 60,0], [3.14159/2,0,0]); // 6
         this.cameras.addCamera(Camera, [0,100,0], [3.14159/2,0,0]); // 7
+        this.cameras.addCamera(Camera, [0,-20,-30], [-3.14159/6,0,0]); // 8
+        this.cameras.addCamera(Camera, [0,-60,-60], [-3.14159/4,0,0]); // 9
 
         this.lights = new LightSystem([0.3, 0.3, 0.3]);
         this.lights.addDirLight([1,-1,1], [0.3,0.3,0.3]);

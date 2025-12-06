@@ -35,6 +35,12 @@
             }
             #controlbutton {
                 float: left;
+                width: 250px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+            }
+            #controltoggle {
+                float: left;
                 width: 166px;
                 padding-top: 10px;
                 padding-bottom: 10px;
@@ -61,16 +67,15 @@
                 <h3> Shader Controls: </h3>
                 <div id="controlbutton"> <button id="swap_debug"> Change Render Step </button> </div>
                 <div id="controlbutton"> <button id="swap_skybox"> Change Skybox </button> </div>
-                <div id="controlbutton"> <button id="swap_3"> Swap 3 </button> </div>
-                <div id="controlbutton">
+                <div id="controltoggle">
                     <p> Disable Skybox </p>
                     <input type="checkbox" id="toggle_skybox">
                 </div>
-                <div id="controlbutton">
+                <div id="controltoggle">
                     <p> Disable Objects </p>
                     <input type="checkbox" id="toggle_render">
                 </div>
-                <div id="controlbutton">
+                <div id="controltoggle">
                     <p> Disable Movement </p>
                     <input type="checkbox" id="toggle_update">
                 </div>
